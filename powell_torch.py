@@ -448,10 +448,10 @@ def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
 def compute_mi(ref_img, flt_imgs, t_mats, eref, volume):
     flt_warped = batch_transform(flt_imgs, t_mats, volume)
     #flt_img = transform(flt_img, t_mat)
-    print(flt_warped.shape)
+    # print(flt_warped.shape)
     mi_a = mutual_information(ref_img, flt_warped[0].ravel(), eref)
     mi_b = mutual_information(ref_img, flt_warped[1].ravel(), eref)
-    print("mi_a = ", mi_a, " mi_b = ", mi_b)
+    # print("mi_a = ", mi_a, " mi_b = ", mi_b)
     return torch.exp(-mi_a).cpu(), torch.exp(-mi_b).cpu()
 
 # def compute_cc(ref_img, flt_imgs, t_mats, cc_ref):
@@ -534,7 +534,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8, params_trans, volume)
     end_single_sw = time.time()
-    print('Final time: ', end_single_sw - start_single_sw)
+    # print('Final time: ', end_single_sw - start_single_sw)
     with open(filename, 'a') as file2:
                 file2.write("%s\n" % (end_single_sw - start_single_sw))
  
@@ -565,7 +565,7 @@ def save_data(OUT_STAK, name, res_path, volume):
         b=name[i].split('/')
         c=b.pop()
         d=c.split('.')
-        print(OUT_STAK.shape)
+        # print(OUT_STAK.shape)
     
         cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5]))+'.png'), newArray3D[i]) #Creare cartelle 
 
@@ -647,7 +647,7 @@ def compute_wrapper(args, num_threads=1):
         CT.sort()
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
-        print(images_per_thread)
+        # print(images_per_thread)
         for i in range(num_threads):
             start = images_per_thread * i
             end = images_per_thread * (i + 1) if i < num_threads - 1 else len(CT)
