@@ -50,13 +50,13 @@ def to_cuda(input_data):
     return input_data.cuda(non_blocking=True)
 
 def batch_transform(images, pars, volume):
-    img_warped = kornia.geometry.warp_affine3D(images, pars, dsize=(volume, images.shape[2], images.shape[3]), align_corners = True)
+    img_warped = kornia.geometry.warp_affine3d(images, pars, dsize=(volume, images.shape[3], images.shape[4]), align_corners = True)
     return img_warped
 
 def transform(image, par, volume):
     tmp_img = image.reshape((1, 1, *image.shape)).float()
     t_par = torch.unsqueeze(par, dim=0)
-    img_warped = kornia.geometry.warp_affine3D(tmp_img, t_par, dsize=(volume, tmp_img.shape[2], tmp_img.shape[3]), align_corners = True)
+    img_warped = kornia.geometry.warp_affine3d(tmp_img, t_par, dsize=(volume, tmp_img.shape[2], tmp_img.shape[3]), align_corners = True)
     return img_warped 
 
 # def compute_moments(img):
@@ -90,7 +90,7 @@ def to_matrix_complete(vector_params):
         vector_params contains tx, ty, tz for translation on x, y and z axes respectively
         and cosine of phi, theta, psi for rotations around x, y, and z axes respectively.
     """
-    mat_params=np.zeros((3,4))
+    mat_params=torch.empty((3,4))
     mat_params[0][3]=vector_params[0] 
     mat_params[1][3]=vector_params[1] 
     mat_params[2][3]=vector_params[2]
@@ -241,11 +241,11 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
 def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
     params = np.zeros((6,))
     psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume)
-    rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2], device=device)
-    rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2], device=device)
+    rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2])
+    rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2])
     phi, _, _  = estimate_rho(rot_ref_phi, rot_flt_phi, params, volume)
-    rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2], device=device)
-    rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2], device=device)
+    rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2])
+    rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2])
     theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume)
     params = [tx, ty, 0, np.cos(phi), np.cos(theta), np.cos(psi)]
     return params
@@ -357,8 +357,10 @@ def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
 def compute_mi(ref_img, flt_imgs, t_mats, eref, volume):
     flt_warped = batch_transform(flt_imgs, t_mats, volume)
     #flt_img = transform(flt_img, t_mat)
+    print(flt_warped.shape)
     mi_a = mutual_information(ref_img, flt_warped[0].ravel(), eref)
     mi_b = mutual_information(ref_img, flt_warped[1].ravel(), eref)
+    print("mi_a = ", mi_a, " mi_b = ", mi_b)
     return torch.exp(-mi_a).cpu(), torch.exp(-mi_b).cpu()
 
 # def compute_cc(ref_img, flt_imgs, t_mats, cc_ref):
@@ -373,7 +375,8 @@ def compute_mi(ref_img, flt_imgs, t_mats, eref, volume):
 #     mse_b = mean_squared_error(ref_img, flt_warped[1].ravel(), mse_ref)
 #     return mse_a.cpu(), mse_b.cpu()
 
-def optimize_goldsearch(par, rng, ref_sup_ravel, flt_stack, linear_par, i, eref):
+def optimize_goldsearch(par, rng, ref_sup_ravel, flt_stack, linear_par, i, eref, volume):
+    global compute_metric
     start=par-0.382*rng
     end=par+0.618*rng
     c=(end-(end-start)/1.618)
@@ -385,7 +388,7 @@ def optimize_goldsearch(par, rng, ref_sup_ravel, flt_stack, linear_par, i, eref)
         linear_par[i]=d
         b_mat=to_matrix_complete(linear_par)
         mats = move_data(torch.stack((a_mat, b_mat)))
-        mi_a, mi_b = compute_metric(ref_sup_ravel, flt_stack, mats, eref)
+        mi_a, mi_b = compute_mi(ref_sup_ravel, flt_stack, mats, eref, volume)
         if(mi_a < mi_b):
             end=d
             best_mi = mi_a
@@ -398,7 +401,7 @@ def optimize_goldsearch(par, rng, ref_sup_ravel, flt_stack, linear_par, i, eref)
         d=(start+(end-start)/1.618)
     return (end+start)/2, best_mi
 
-def optimize_powell(rng, par_lin, ref_sup_ravel, flt_stack, eref):
+def optimize_powell(rng, par_lin, ref_sup_ravel, flt_stack, eref, volume):
     converged = False
     eps = 0.000005
     last_mut=100000.0
@@ -409,7 +412,7 @@ def optimize_powell(rng, par_lin, ref_sup_ravel, flt_stack, eref):
         for i in range(par_lin.numel()):
             cur_par = par_lin[i]
             cur_rng = rng[i]
-            param_opt, cur_mi = optimize_goldsearch(cur_par, cur_rng, ref_sup_ravel, flt_stack, par_lin, i, eref)
+            param_opt, cur_mi = optimize_goldsearch(cur_par, cur_rng, ref_sup_ravel, flt_stack, par_lin, i, eref, volume)
             par_lin[i]=cur_par
             if last_mut-cur_mi>eps:
                 par_lin[i]=param_opt
@@ -420,9 +423,10 @@ def optimize_powell(rng, par_lin, ref_sup_ravel, flt_stack, eref):
     #print("Iterations "+str(it))
     return (par_lin)
 
-def register_images(filename, Ref_uint8, Flt_uint8, volume, wonderful_list):
+def register_images(filename, Ref_uint8, Flt_uint8, volume):
+    global precompute_metric
     start_single_sw = time.time()
-    params = torch.empty((1,6), device = device)
+    params = torch.empty((6,), device = device)
     params1 = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
     for i in range(len(params1)):
         params[i] = params1[i]
@@ -432,10 +436,10 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume, wonderful_list):
     print(params)
     pa = params_cpu.clone()
     Ref_uint8_ravel = Ref_uint8.ravel().double()
-    eref = precompute_metric(Ref_uint8_ravel)
+    eref = precompute_mutual_information(Ref_uint8_ravel)
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
-    optimal_params = optimize_powell(rng, pa, Ref_uint8_ravel, flt_stack, eref, volume) 
+    optimal_params = optimize_powell(rng, pa, Ref_uint8_ravel, flt_stack, eref,volume) 
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8, params_trans, volume)
     end_single_sw = time.time()
@@ -479,7 +483,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         it_time = 0.0
         hist_dim = 256
         dim = 512
-
+        #print(CT)
+        #print(PET)
         global ref_vals
         ref_vals = torch.ones(dim*dim*volume, dtype=torch.int, device=device)
         global move_data
@@ -509,10 +514,10 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
             if couples >= volume:
                 break
             
-        refs3D = torch.cat(refs, device=device)
-        flts3D = torch.cat(flts, device=device)
-        refs3D = torch.reshape(refs3D,(volume,512,512), device=device)
-        flts3D = torch.reshape(flts3D,(volume,512,512), device=device)
+        refs3D = torch.cat(refs)
+        flts3D = torch.cat(flts)
+        refs3D = torch.reshape(refs3D,(volume,512,512))
+        flts3D = torch.reshape(flts3D,(volume,512,512))
         start_time = time.time()
         final_img=(register_images(filename, refs3D, flts3D, volume))
         end_time= time.time()
@@ -532,13 +537,16 @@ def compute_wrapper(args, num_threads=1):
     
     for k in range(args.offset, args.patient):
         pool = []
-        curr_prefix = args.prefix+str(k)
+        #curr_prefix = args.prefix+str(k)
+        curr_prefix = args.prefix
         curr_ct = os.path.join(curr_prefix,args.ct_path)
         curr_pet = os.path.join(curr_prefix,args.pet_path)
         curr_res = os.path.join("",args.res_path)
         os.makedirs(curr_res,exist_ok=True)
         CT=glob.glob(curr_ct+'/*dcm')
         PET=glob.glob(curr_pet+'/*dcm')
+        #print(curr_ct)
+        #print(curr_pet)
         PET.sort()
         CT.sort()
         assert len(CT) == len(PET)
@@ -548,6 +556,7 @@ def compute_wrapper(args, num_threads=1):
             start = images_per_thread * i
             end = images_per_thread * (i + 1) if i < num_threads - 1 else len(CT)
             name = "t%02d" % (i)
+            set_start_method('spawn')
             pool.append(Process(target=compute, args=(CT[start:end], PET[start:end], name, curr_res, i, k, args.filename,args.volume)))
         for t in pool:
             t.start()
@@ -582,8 +591,9 @@ def main():
     print(args.config)
     print(args)
 
-    global compute_metric, precompute_metric
+    global compute_metric
     compute_metric = compute_mi
+    global precompute_metric
     precompute_metric = precompute_mutual_information
 
     global device

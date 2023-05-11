@@ -31,8 +31,8 @@ PYCODE_Powell=powell_torch.py
 PYCODE_oneplusone=one_plus_one_torch.py
 
 DATASET_FLDR=./
-CT_PATH=Dataset/SE0
-PET_PATH=Dataset/SE4
+CT_PATH=Dataset/ST0/SE0
+PET_PATH=Dataset/ST0/SE4
 RES_PATH=Dataset/Output
 
 #metric=( MI CC MSE )
