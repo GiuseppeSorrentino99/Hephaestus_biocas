@@ -641,9 +641,9 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     child = torch.empty(spaceDimension)
     delta = torch.empty(spaceDimension)
     
-    
-    
     parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, volume)
+
+    #parentPosition = estimate_initial(Ref_uint8, Flt_uint8, volume)
 
     Ref_uint8_ravel = Ref_uint8.ravel().double()
     parent = to_matrix_complete(parentPosition)
