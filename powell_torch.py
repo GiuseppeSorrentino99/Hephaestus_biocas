@@ -252,6 +252,95 @@ def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
     params = [tx, ty, 0, np.cos(phi), np.cos(theta), np.cos(psi)]
     return params
 
+def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
+    
+    tot_flt_avg_10 = 0
+    tot_flt_avg_01 = 0
+    tot_flt_mu_20 = 0
+    tot_flt_mu_02 = 0
+    tot_flt_mu_11 = 0
+    tot_ref_avg_10 = 0
+    tot_ref_avg_01 = 0
+    tot_ref_mu_20 = 0
+    tot_ref_mu_02 = 0
+    tot_ref_mu_11 = 0
+    tot_params1 = 0
+    tot_params2 = 0
+    tot_roundness = 0
+    for i in range(0, volume):
+        Ref_uint8 = Ref_uint8s[i, :, :]
+        Flt_uint8 = Flt_uint8s[i, :, :]
+        X = Ref_uint8.numpy()
+        Y = Flt_uint8.numpy()
+        try:
+            ref_mom = cv2.moments(X)
+            flt_mom = cv2.moments(Y)
+        except:
+             continue
+        flt_avg_10 = flt_mom['m10']/flt_mom['m00']
+        flt_avg_01 = flt_mom['m01']/flt_mom['m00']
+        flt_mu_20 = (flt_mom['m20']/flt_mom['m00']*1.0)-(flt_avg_10*flt_avg_10)
+        flt_mu_02 = (flt_mom['m02']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_01)
+        flt_mu_11 = (flt_mom['m11']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_10)
+        ref_avg_10 = ref_mom['m10']/ref_mom['m00']
+        ref_avg_01 = ref_mom['m01']/ref_mom['m00']
+        ref_mu_20 = (ref_mom['m20']/ref_mom['m00']*1.0)-(ref_avg_10*ref_avg_10)
+        ref_mu_02 = (ref_mom['m02']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_01)
+        ref_mu_11 = (ref_mom['m11']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_10)
+        params1 = ref_mom['m10']/ref_mom['m00']-flt_mom['m10']/flt_mom['m00']
+        params2 = ref_mom['m01']/ref_mom['m00'] - flt_mom['m01']/flt_mom['m00']
+        roundness=(flt_mom['m20']/flt_mom['m00']) / (flt_mom['m02']/flt_mom['m00'])
+        tot_flt_avg_10 += flt_avg_10
+        tot_flt_avg_01 += flt_avg_01
+        tot_flt_mu_20 += flt_mu_20
+        tot_flt_mu_02 += flt_mu_02
+        tot_flt_mu_11 += flt_mu_11
+        tot_ref_avg_10 += ref_avg_10
+        tot_ref_avg_01 += ref_avg_01
+        tot_ref_mu_20 += ref_mu_20
+        tot_ref_mu_02 += ref_mu_02
+        tot_ref_mu_11 += ref_mu_11
+        tot_params1 += params1
+        tot_params2 += params2
+        tot_roundness += roundness
+    tot_flt_avg_10 = tot_flt_avg_10/volume
+    tot_flt_avg_01 = tot_flt_avg_01/volume
+    tot_flt_mu_20 = tot_flt_mu_20/volume
+    tot_flt_mu_02 = tot_flt_mu_02/volume
+    tot_flt_mu_11 = tot_flt_mu_11/volume
+    tot_ref_avg_10 = tot_ref_avg_10/volume
+    tot_ref_avg_01 = tot_ref_avg_01/volume
+    tot_ref_mu_20 = tot_ref_mu_20/volume
+    tot_ref_mu_02 = tot_ref_mu_02/volume
+    tot_ref_mu_11 = tot_ref_mu_11/volume
+    tot_params1 = tot_params1/volume
+    tot_params2 = tot_params2/volume
+    tot_roundness = tot_roundness/volume
+
+    #params[0][3] = tot_params1
+    #params[1][3] = tot_params2
+    try:
+        rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
+        rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
+        delta_rho=rho_ref-rho_flt
+    except Exception:
+        delta_rho = 0
+#since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
+    # if math.fabs(tot_roundness-1.0)>=0.3:
+    #     params[0][0]= math.cos(delta_rho)
+    #     params[0][1] = -math.sin(delta_rho)
+    #     params[1][0] = math.sin(delta_rho)
+    #     params[1][1] = math.cos(delta_rho)
+    # else:
+    #     params[0][0]= 1.0
+    #     params[0][1] = 0.0
+    #     params[1][0] = 0.0
+    #     params[1][1] = 1.0
+    # params[2][2] = 1
+    # params[0][2] = params[0][3] = 0
+    # params[2][0] = params[2][1] = 0
+    
+    return [tot_params1, tot_params2, 0, 1, 1, np.cos(delta_rho)]
 
 def my_squared_hist2d_t(sample, bins, smin, smax):
     D, N = sample.shape
@@ -429,7 +518,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     global precompute_metric
     start_single_sw = time.time()
     params = torch.empty((6,), device = device)
-    params1 = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
+    params1 = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
     for i in range(len(params1)):
         params[i] = params1[i]
     params_cpu = params.cpu()
