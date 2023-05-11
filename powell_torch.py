@@ -56,7 +56,7 @@ def batch_transform(images, pars, volume):
 def transform(image, par, volume):
     tmp_img = image.reshape((1, 1, *image.shape)).float()
     t_par = torch.unsqueeze(par, dim=0)
-    img_warped = kornia.geometry.warp_affine3d(tmp_img, t_par, dsize=(volume, tmp_img.shape[2], tmp_img.shape[3]), align_corners = True)
+    img_warped = kornia.geometry.warp_affine3d(tmp_img, t_par, dsize=(volume, tmp_img.shape[3], tmp_img.shape[4]), align_corners = True)
     return img_warped 
 
 # def compute_moments(img):
@@ -228,12 +228,14 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     tot_params1 = tot_params1/volume
     tot_params2 = tot_params2/volume
     tot_roundness = tot_roundness/volume
-
-    rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
-    rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
-    delta_rho=rho_ref-rho_flt
-#since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
-    if math.fabs(tot_roundness-1.0)<0.3:
+    try: 
+        rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
+        rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
+        delta_rho=rho_ref-rho_flt
+        #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
+        if math.fabs(tot_roundness-1.0)<0.3:
+            delta_rho = 0
+    except Exception as e:
         delta_rho = 0
     
     return delta_rho, tot_params1, tot_params2
@@ -466,12 +468,17 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
 #     flt_transform = transform(Flt_uint8, move_data(params_trans))
 #     return (flt_transform)
 
-def save_data(OUT_STAK, name, res_path):
+def save_data(OUT_STAK, name, res_path, volume):
+    OUT_STAK = torch.reshape(OUT_STAK.cpu(), (volume,1,512, 512))
+    newArray3D = kornia.tensor_to_image(OUT_STAK.byte())
+    newArray3D = np.reshape(newArray3D,(volume,512,512))
     for i in range(len(OUT_STAK)):
         b=name[i].split('/')
         c=b.pop()
         d=c.split('.')
-        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5]))+'.png'), kornia.tensor_to_image(OUT_STAK[i].cpu().byte())) #Creare cartelle 
+        print(OUT_STAK.shape)
+    
+        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5]))+'.png'), newArray3D[i]) #Creare cartelle 
 
 
 
@@ -530,7 +537,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         times_df_path = os.path.join(curr_res,'Img_powll_%02d.csv' % (t_id))
         df.to_csv(df_path, index=False)
         times_df.to_csv(times_df_path, index=False)
-        save_data(final_img,PET,curr_res)
+        save_data(final_img,PET,curr_res,volume)
 
 def compute_wrapper(args, num_threads=1):
     config=args.config
