@@ -43,7 +43,7 @@ m_GScale=1.0/30000000.0
 
 compute_metric = None
 precompute_metric = None
-device = "cpu"
+device = "cuda"
 
 ref_vals = None
 move_data = None
@@ -386,8 +386,11 @@ def to_matrix_complete(vector_params):
     cos_phi = vector_params[3]
     cos_theta = vector_params[4]
     cos_psi = vector_params[5]
+
+
     if cos_phi > 1 or cos_phi < -1:
         cos_phi = 1
+
     if cos_theta > 1 or cos_theta < -1:
         cos_theta = 1
     if cos_psi > 1 or cos_psi < -1:
@@ -416,7 +419,20 @@ def to_matrix_complete(vector_params):
     mat_params[2][2] = cos_phi_cos_theta
     return (mat_params)
 
-def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
+
+def compute_moments(img):
+    moments = torch.empty(6, device=device)
+    l = torch.arange(img.shape[0], device=device)
+    moments[0] = torch.sum(img) # m00
+    moments[1] = torch.sum(img * l) # m10
+    moments[2] = torch.sum(img * (l**2)) # m20
+    moments[3] = torch.sum(img * l.reshape((img.shape[0], 1)) ) # m01
+    moments[4] = torch.sum(img * (l.reshape((img.shape[0], 1)))**2 ) # m02
+    moments[5] = torch.sum(img * l * l.reshape((img.shape[0], 1))) # m11
+    return moments
+
+def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
+    
     tot_flt_avg_10 = 0
     tot_flt_avg_01 = 0
     tot_flt_mu_20 = 0
@@ -433,27 +449,26 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     for i in range(0, volume):
         Ref_uint8 = Ref_uint8s[i, :, :]
         Flt_uint8 = Flt_uint8s[i, :, :]
-        X = Ref_uint8.numpy()
-        Y = Flt_uint8.numpy()
         try:
-            ref_mom = cv2.moments(X)
-            flt_mom = cv2.moments(Y)
+            ref_mom = compute_moments(Ref_uint8)
+            flt_mom = compute_moments(Flt_uint8)
+        except:
+             continue
+        flt_avg_10 = flt_mom[1]/flt_mom[0]
+        flt_avg_01 = flt_mom[3]/flt_mom[0]
+        flt_mu_20 = (flt_mom[2]/flt_mom[0]*1.0)-(flt_avg_10*flt_avg_10)
+        flt_mu_02 = (flt_mom[4]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_01)
+        flt_mu_11 = (flt_mom[5]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_10)
+        ref_avg_10 = ref_mom[1]/ref_mom[0]
+        ref_avg_01 = ref_mom[3]/ref_mom[0]
+        ref_mu_20 = (ref_mom[2]/ref_mom[0]*1.0)-(ref_avg_10*ref_avg_10)
+        ref_mu_02 = (ref_mom[4]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_01)
+        ref_mu_11 = (ref_mom[5]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_10)
         
-            flt_avg_10 = flt_mom['m10']/flt_mom['m00']
-            flt_avg_01 = flt_mom['m01']/flt_mom['m00']
-            flt_mu_20 = (flt_mom['m20']/flt_mom['m00']*1.0)-(flt_avg_10*flt_avg_10)
-            flt_mu_02 = (flt_mom['m02']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_01)
-            flt_mu_11 = (flt_mom['m11']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_10)
-            ref_avg_10 = ref_mom['m10']/ref_mom['m00']
-            ref_avg_01 = ref_mom['m01']/ref_mom['m00']
-            ref_mu_20 = (ref_mom['m20']/ref_mom['m00']*1.0)-(ref_avg_10*ref_avg_10)
-            ref_mu_02 = (ref_mom['m02']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_01)
-            ref_mu_11 = (ref_mom['m11']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_10)
-            params1 = ref_mom['m10']/ref_mom['m00']-flt_mom['m10']/flt_mom['m00']
-            params2 = ref_mom['m01']/ref_mom['m00'] - flt_mom['m01']/flt_mom['m00']
-            roundness=(flt_mom['m20']/flt_mom['m00']) / (flt_mom['m02']/flt_mom['m00'])
-        except:
-             continue
+        params[0] = ref_mom[1]/ref_mom[0] - flt_mom[1]/flt_mom[0]
+        params[1] = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
+
+        roundness=(flt_mom[2]/flt_mom[0]) / (flt_mom[4]/flt_mom[0])
         tot_flt_avg_10 += flt_avg_10
         tot_flt_avg_01 += flt_avg_01
         tot_flt_mu_20 += flt_mu_20
@@ -464,8 +479,8 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
         tot_ref_mu_20 += ref_mu_20
         tot_ref_mu_02 += ref_mu_02
         tot_ref_mu_11 += ref_mu_11
-        tot_params1 += params1
-        tot_params2 += params2
+        tot_params1 += params[0]
+        tot_params2 += params[1]
         tot_roundness += roundness
     tot_flt_avg_10 = tot_flt_avg_10/volume
     tot_flt_avg_01 = tot_flt_avg_01/volume
@@ -480,100 +495,9 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     tot_params1 = tot_params1/volume
     tot_params2 = tot_params2/volume
     tot_roundness = tot_roundness/volume
-    try: 
-        rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
-        rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
-        delta_rho=rho_ref-rho_flt
-        #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
-        if math.fabs(tot_roundness-1.0)<0.3:
-            delta_rho = 0
-    except Exception as e:
-        delta_rho = 0
-    
-    return delta_rho, tot_params1, tot_params2
-
-def estimate_initial3D(Ref_uint8s,Flt_uint8s, volume):
-    params = np.zeros((6,))
-    psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume)
-    rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2])
-    rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2])
-    phi, _, _  = estimate_rho(rot_ref_phi, rot_flt_phi, params, volume)
-    rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2])
-    rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2])
-    theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume)
-    params = [tx, ty, 0, np.cos(phi), np.cos(theta), np.cos(psi)]
-    return params
-
-def estimate_initial(Ref_uint8s,Flt_uint8s,  volume):
-    
-    tot_flt_avg_10 = 0
-    tot_flt_avg_01 = 0
-    tot_flt_mu_20 = 0
-    tot_flt_mu_02 = 0
-    tot_flt_mu_11 = 0
-    tot_ref_avg_10 = 0
-    tot_ref_avg_01 = 0
-    tot_ref_mu_20 = 0
-    tot_ref_mu_02 = 0
-    tot_ref_mu_11 = 0
-    tot_params1 = 0
-    tot_params2 = 0
-    tot_roundness = 0
-    for i in range(0, volume):
-        Ref_uint8 = Ref_uint8s[i, :, :]
-        Flt_uint8 = Flt_uint8s[i, :, :]
-        X = Ref_uint8.numpy()
-        Y = Flt_uint8.numpy()
-        try:
-            ref_mom = cv2.moments(X)
-            flt_mom = cv2.moments(Y)
-        except:
-             continue
-        flt_avg_10 = flt_mom['m10']/flt_mom['m00']
-        flt_avg_01 = flt_mom['m01']/flt_mom['m00']
-        flt_mu_20 = (flt_mom['m20']/flt_mom['m00']*1.0)-(flt_avg_10*flt_avg_10)
-        flt_mu_02 = (flt_mom['m02']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_01)
-        flt_mu_11 = (flt_mom['m11']/flt_mom['m00']*1.0)-(flt_avg_01*flt_avg_10)
-        ref_avg_10 = ref_mom['m10']/ref_mom['m00']
-        ref_avg_01 = ref_mom['m01']/ref_mom['m00']
-        ref_mu_20 = (ref_mom['m20']/ref_mom['m00']*1.0)-(ref_avg_10*ref_avg_10)
-        ref_mu_02 = (ref_mom['m02']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_01)
-        ref_mu_11 = (ref_mom['m11']/ref_mom['m00']*1.0)-(ref_avg_01*ref_avg_10)
-        params1 = ref_mom['m10']/ref_mom['m00']-flt_mom['m10']/flt_mom['m00']
-        params2 = ref_mom['m01']/ref_mom['m00'] - flt_mom['m01']/flt_mom['m00']
-        roundness=(flt_mom['m20']/flt_mom['m00']) / (flt_mom['m02']/flt_mom['m00'])
-        tot_flt_avg_10 += flt_avg_10
-        tot_flt_avg_01 += flt_avg_01
-        tot_flt_mu_20 += flt_mu_20
-        tot_flt_mu_02 += flt_mu_02
-        tot_flt_mu_11 += flt_mu_11
-        tot_ref_avg_10 += ref_avg_10
-        tot_ref_avg_01 += ref_avg_01
-        tot_ref_mu_20 += ref_mu_20
-        tot_ref_mu_02 += ref_mu_02
-        tot_ref_mu_11 += ref_mu_11
-        tot_params1 += params1
-        tot_params2 += params2
-        tot_roundness += roundness
-    tot_flt_avg_10 = tot_flt_avg_10/volume
-    tot_flt_avg_01 = tot_flt_avg_01/volume
-    tot_flt_mu_20 = tot_flt_mu_20/volume
-    tot_flt_mu_02 = tot_flt_mu_02/volume
-    tot_flt_mu_11 = tot_flt_mu_11/volume
-    tot_ref_avg_10 = tot_ref_avg_10/volume
-    tot_ref_avg_01 = tot_ref_avg_01/volume
-    tot_ref_mu_20 = tot_ref_mu_20/volume
-    tot_ref_mu_02 = tot_ref_mu_02/volume
-    tot_ref_mu_11 = tot_ref_mu_11/volume
-    tot_params1 = tot_params1/volume
-    tot_params2 = tot_params2/volume
-    tot_roundness = tot_roundness/volume
-
-    #params[0][3] = tot_params1
-    #params[1][3] = tot_params2
     try:
-        rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
-        rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
+        rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
+        rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
         delta_rho=rho_ref-rho_flt
     except Exception:
         delta_rho = 0
@@ -591,8 +515,8 @@ def estimate_initial(Ref_uint8s,Flt_uint8s,  volume):
     # params[2][2] = 1
     # params[0][2] = params[0][3] = 0
     # params[2][0] = params[2][1] = 0
-    
-    return [tot_params1, tot_params2, 0, 1, 1, np.cos(delta_rho)]
+
+    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.Tensor([delta_rho]))]
 
 def transform(image, par, volume):
     tmp_img = image.reshape((1, 1, *image.shape)).float()
@@ -601,7 +525,7 @@ def transform(image, par, volume):
     return img_warped 
 
 def compute_mi(ref_img, flt_img, t_mat, eref, volume):
-    flt_warped = transform(flt_img, t_mat, volume)
+    flt_warped = transform(flt_img, to_cuda(t_mat), volume)
     mi = mutual_information(ref_img, flt_warped.ravel(), eref)
     return -(mi.cpu())
 
@@ -628,7 +552,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     m_GrowthFactor = 1.05
     m_ShrinkFactor = torch.pow(m_GrowthFactor, torch.tensor(-0.25))
     m_InitialRadius = 1.01
-    m_MaximumIteration = 100
+    m_MaximumIteration = 200
     m_Stop = False
     m_CurrentCost = 0
     m_CurrentIteration = 0
@@ -641,16 +565,15 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     child = torch.empty(spaceDimension)
     delta = torch.empty(spaceDimension)
     
-    parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, volume)
-
-    #parentPosition = estimate_initial(Ref_uint8, Flt_uint8, volume)
-
+    #parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, volume)
+    params = torch.empty((6,), device = device)
+    parentPosition = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
     Ref_uint8_ravel = Ref_uint8.ravel().double()
     parent = to_matrix_complete(parentPosition)
     pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, parent, eref, volume)
     childPosition = torch.empty(spaceDimension)
 
-    m_CurrentIteration = 0;
+    m_CurrentIteration = 0
     
     for i in range (0,m_MaximumIteration):
         m_CurrentIteration=m_CurrentIteration+1
@@ -696,16 +619,16 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     return (parentPosition) 
 
 def save_data(OUT_STAK, name, res_path, volume):
-    OUT_STAK = torch.reshape(OUT_STAK.cpu(), (volume,1,512, 512))
-    newArray3D = kornia.tensor_to_image(OUT_STAK.byte())
-    newArray3D = np.reshape(newArray3D,(volume,512,512))
+    OUT_STAK = torch.reshape(OUT_STAK,(volume,1,512, 512))
+    # print(OUT_STAK.shape)
+    # print(OUT_STAK.size())
     for i in range(len(OUT_STAK)):
         b=name[i].split('/')
         c=b.pop()
         d=c.split('.')
-        #print(OUT_STAK.shape)
-    
-        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5]))+'.png'), newArray3D[i]) #Creare cartelle 
+        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5])+1)+'.png'), kornia.tensor_to_image(OUT_STAK[i].cpu().byte())) #Creare cartelle 
+
+
 
 def register_images(filename, Ref_uint8, Flt_uint8, volume):
     global precompute_metric
@@ -715,7 +638,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     flt_stack = torch.stack((flt_u, flt_u))
     optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref) 
     params_trans=to_matrix_complete(optimal_params)
-    flt_transform = transform(Flt_uint8, move_data(params_trans),volume)
+    flt_transform = transform(Flt_uint8, to_cuda(params_trans),volume)
     end_single_sw = time.time()
     # print('Final time: ', end_single_sw - start_single_sw)
     with open(filename, 'a') as file2:
@@ -767,7 +690,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         refs3D = torch.reshape(refs3D,(volume,512,512))
         flts3D = torch.reshape(flts3D,(volume,512,512))
         start_time = time.time()
-        final_img=(register_images(filename, refs3D, flts3D, volume))
+        f_img=(register_images(filename, refs3D, flts3D, volume))
+        final_img = f_img.cpu()
         end_time= time.time()
         it_time = (end_time - start_time)
         times.append(it_time)
