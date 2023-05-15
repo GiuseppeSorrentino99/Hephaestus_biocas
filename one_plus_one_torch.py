@@ -516,7 +516,7 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     # params[0][2] = params[0][3] = 0
     # params[2][0] = params[2][1] = 0
 
-    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.Tensor([delta_rho]))]
+    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.tensor([delta_rho],dtype=torch.float64))]
 
 def transform(image, par, volume):
     tmp_img = image.reshape((1, 1, *image.shape)).float()
@@ -552,7 +552,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     m_GrowthFactor = 1.05
     m_ShrinkFactor = torch.pow(m_GrowthFactor, torch.tensor(-0.25))
     m_InitialRadius = 1.01
-    m_MaximumIteration = 200
+    m_MaximumIteration = 100
     m_Stop = False
     m_CurrentCost = 0
     m_CurrentIteration = 0
