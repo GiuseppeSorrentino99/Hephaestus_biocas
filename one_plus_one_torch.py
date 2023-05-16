@@ -396,9 +396,9 @@ def to_matrix_complete(vector_params):
         cos_theta = 1
     if cos_psi > 1 or cos_psi < -1:
         cos_psi = 1
-    sin_phi = -np.sqrt(1-(cos_phi**2))
-    sin_theta = -np.sqrt(1-(cos_theta**2))
-    sin_psi = -np.sqrt(1-(cos_psi**2))
+    sin_phi = -torch.sqrt(torch.Tensor([1-(cos_phi**2)]))
+    sin_theta = -torch.sqrt(torch.Tensor([1-(cos_theta**2)]))
+    sin_psi = -torch.sqrt(torch.Tensor([1-(cos_psi**2)]))
     sin_theta_sin_psi = sin_theta * sin_psi
     sin_theta_cos_psi = sin_theta * cos_psi
     cos_theta_cos_psi = cos_theta * cos_psi
@@ -500,6 +500,8 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
         rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
         rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
         delta_rho=rho_ref-rho_flt
+        if math.fabs(tot_roundness-1.0)<0.3:
+            delta_rho = 0
     except Exception:
         delta_rho = 0
 #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
@@ -516,8 +518,14 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     # params[2][2] = 1
     # params[0][2] = params[0][3] = 0
     # params[2][0] = params[2][1] = 0
-
-    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.tensor([delta_rho],dtype=torch.float64))]
+    params[0] = tot_params1
+    params[1] = tot_params2
+    params[2] = torch.Tensor([0])
+    params[3] = torch.Tensor([1])
+    params[4] = torch.Tensor([1])
+    params[5] = torch.cos(torch.tensor([delta_rho]))
+    #print("before: ", params)
+    return params
 
 def transform(image, par, volume):
     tmp_img = image.reshape((1, 1, *image.shape)).float()
@@ -540,6 +548,106 @@ def compute_mi(ref_img, flt_img, t_mat, eref, volume):
 #     mse = mean_squared_error(ref_img, flt_warped.ravel(), mse_ref)
 #     return mse.cpu()
 
+def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
+    tot_flt_avg_10 = 0
+    tot_flt_avg_01 = 0
+    tot_flt_mu_20 = 0
+    tot_flt_mu_02 = 0
+    tot_flt_mu_11 = 0
+    tot_ref_avg_10 = 0
+    tot_ref_avg_01 = 0
+    tot_ref_mu_20 = 0
+    tot_ref_mu_02 = 0
+    tot_ref_mu_11 = 0
+    tot_params1 = 0
+    tot_params2 = 0
+    tot_roundness = 0
+    for i in range(0, volume):
+        Ref_uint8 = Ref_uint8s[i, :, :]
+        Flt_uint8 = Flt_uint8s[i, :, :]
+        
+        try:
+            ref_mom = compute_moments(Ref_uint8)
+            #print(ref_mom)
+            flt_mom = compute_moments(Flt_uint8)
+            #print(flt_mom)
+
+            flt_avg_10 = flt_mom[1]/flt_mom[0]
+            flt_avg_01 = flt_mom[3]/flt_mom[0]
+            flt_mu_20 = (flt_mom[2]/flt_mom[0]*1.0)-(flt_avg_10*flt_avg_10)
+            flt_mu_02 = (flt_mom[4]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_01)
+            flt_mu_11 = (flt_mom[5]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_10)
+            ref_avg_10 = ref_mom[1]/ref_mom[0]
+            ref_avg_01 = ref_mom[3]/ref_mom[0]
+            ref_mu_20 = (ref_mom[2]/ref_mom[0]*1.0)-(ref_avg_10*ref_avg_10)
+            ref_mu_02 = (ref_mom[4]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_01)
+            ref_mu_11 = (ref_mom[5]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_10)
+            
+            params[0] = ref_mom[1]/ref_mom[0] - flt_mom[1]/flt_mom[0]
+            params[1] = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
+
+            roundness=(flt_mom[2]/flt_mom[0]) / (flt_mom[4]/flt_mom[0])
+            tot_flt_avg_10 += flt_avg_10
+            tot_flt_avg_01 += flt_avg_01
+            tot_flt_mu_20 += flt_mu_20
+            tot_flt_mu_02 += flt_mu_02
+            tot_flt_mu_11 += flt_mu_11
+            tot_ref_avg_10 += ref_avg_10
+            tot_ref_avg_01 += ref_avg_01
+            tot_ref_mu_20 += ref_mu_20
+            tot_ref_mu_02 += ref_mu_02
+            tot_ref_mu_11 += ref_mu_11
+            tot_params1 += params[0]
+            tot_params2 += params[1]
+            tot_roundness += roundness
+            #print(i)
+        except:
+             continue
+        
+    tot_flt_avg_10 = tot_flt_avg_10/volume
+    tot_flt_avg_01 = tot_flt_avg_01/volume
+    tot_flt_mu_20 = tot_flt_mu_20/volume
+    tot_flt_mu_02 = tot_flt_mu_02/volume
+    tot_flt_mu_11 = tot_flt_mu_11/volume
+    tot_ref_avg_10 = tot_ref_avg_10/volume
+    tot_ref_avg_01 = tot_ref_avg_01/volume
+    tot_ref_mu_20 = tot_ref_mu_20/volume
+    tot_ref_mu_02 = tot_ref_mu_02/volume
+    tot_ref_mu_11 = tot_ref_mu_11/volume
+    tot_params1 = tot_params1/volume
+    tot_params2 = tot_params2/volume
+    tot_roundness = tot_roundness/volume
+    try: 
+        rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
+        rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
+        delta_rho=rho_ref-rho_flt
+        #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
+        if math.fabs(tot_roundness-1.0)<0.3:
+            delta_rho = 0
+    except Exception as e:
+        delta_rho = 0
+    
+    #print(tot_params1, tot_params2)
+    return torch.Tensor([delta_rho]), torch.Tensor([tot_params1]), torch.Tensor([tot_params2])
+
+def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
+    params = torch.zeros((6,))
+    psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume)
+    rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2])
+    rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2])
+    phi, _, _  = estimate_rho(rot_ref_phi, rot_flt_phi, params, volume)
+    rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2])
+    rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2])
+    theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume)
+    params[0] = tx
+    params[1] = ty
+    params[2] = torch.Tensor([0])
+    params[3] = torch.cos(phi)
+    params[4] = torch.cos(theta)
+    params[5] = torch.cos(psi)
+    #params = [tx, ty, 0, torch.cos(phi), torch.cos(theta), torch.cos(psi)]
+    return params
+
 def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     
     #parent_cpu = parent.cpu() 
@@ -553,7 +661,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     m_GrowthFactor = 1.05
     m_ShrinkFactor = torch.pow(m_GrowthFactor, torch.tensor(-0.25))
     m_InitialRadius = 1.01
-    m_MaximumIteration = 100
+    m_MaximumIteration = 200
     m_Stop = False
     m_CurrentCost = 0
     m_CurrentIteration = 0
@@ -568,7 +676,9 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     
     #parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, volume)
     params = torch.empty((6,), device = device)
-    parentPosition = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
+    parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
+    parentPosition = parentPosition.cpu()
+    #print("after", parentPosition)
     Ref_uint8_ravel = Ref_uint8.ravel().double()
     parent = to_matrix_complete(parentPosition)
     pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, parent, eref, volume)
@@ -637,7 +747,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     eref = precompute_mutual_information(Ref_uint8)
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
-    optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref) 
+    optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref)
+    print("optimal: ", optimal_params) 
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8, to_cuda(params_trans),volume)
     end_single_sw = time.time()

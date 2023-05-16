@@ -240,8 +240,13 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
         delta_rho=rho_ref-rho_flt
     except Exception:
         delta_rho = 0
-
-    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.tensor([delta_rho],dtype=torch.float64))]
+    params[0] = tot_params1
+    params[1] = tot_params2
+    params[2] = 0
+    params[3] = 1
+    params[4] = 1
+    params[5] = torch.cos(torch.tensor([delta_rho],dtype=torch.float64))
+    return params
 
 def NormalVariateGenerator():
 
@@ -413,7 +418,7 @@ def FastNorm():
 
 def transform(image, par, volume):
     par = to_matrix_complete(par)
-    tmp_img = image.reshape((1, 1, *image.shape)).float()
+    tmp_img = image.reshape((1,1, *image.shape)).float()
     t_par = torch.unsqueeze(par, dim=0)
     img_warped = kornia.geometry.warp_affine3d(to_cuda(tmp_img), to_cuda(t_par), dsize=(volume, tmp_img.shape[3], tmp_img.shape[4]), align_corners = True)
     return img_warped
@@ -421,6 +426,8 @@ def transform(image, par, volume):
 
 def compute_mi(ref_img, flt_imgs, t_mats, eref, volume):
     flt_warped = transform(flt_imgs, t_mats, volume)
+
+    print(flt_warped.shape)
     mi_a = mutual_information(ref_img, flt_warped[0].ravel(), eref)
     mi_b = mutual_information(ref_img, flt_warped[1].ravel(), eref)
     return torch.exp(-mi_a).cpu(), torch.exp(-mi_b).cpu()
@@ -448,13 +455,13 @@ def OnePlusOne(Ref_uint8_ravel, Flt_uint8, eref, parent,volume):
     m_GrowthFactor = 1.05
     m_ShrinkFactor = torch.pow(m_GrowthFactor, torch.tensor(-0.25))
     m_InitialRadius = 1.01
-    m_MaximumIteration = 100
+    m_MaximumIteration = 200
     m_Stop = False
     m_CurrentCost = 0
     m_CurrentIteration = 0
     m_FrobeniusNorm = 0.0
 
-    spaceDimension = 3 
+    spaceDimension = 6 
 
     A = torch.eye(spaceDimension)*m_InitialRadius
     f_norm = torch.zeros(spaceDimension)
@@ -463,7 +470,7 @@ def OnePlusOne(Ref_uint8_ravel, Flt_uint8, eref, parent,volume):
     
     pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, parent, eref,volume)
     
-    parentPosition = torch.tensor([parent_cpu[0][3],parent_cpu[1][3],parent_cpu[0][0]])
+    parentPosition = torch.tensor([parent_cpu[0],parent_cpu[1], parent_cpu[2], parent_cpu[3], parent_cpu[4], parent_cpu[5]])
     childPosition = torch.empty(spaceDimension)
 
     m_CurrentIteration = 0;
@@ -522,7 +529,7 @@ def register_images(filename,Ref_uint8, Flt_uint8,volume):
     start_single_sw = time.time()
 
     parent = torch.empty((6,), device = device)
-    estimate_initial(Ref_uint8, Flt_uint8, parent,volume) 
+    parent = estimate_initial(Ref_uint8, Flt_uint8, parent,volume) 
         
     Ref_uint8_ravel = Ref_uint8.ravel().double()
     
@@ -539,7 +546,7 @@ def register_images(filename,Ref_uint8, Flt_uint8,volume):
     return (flt_transform)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id,filename,volume):
-    for _ in range(10):
+    for _ in range(1):
         final_img=[]
         times=[]
         t = 0.0

@@ -169,8 +169,10 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
         
         try:
             ref_mom = compute_moments(Ref_uint8)
+            #print(ref_mom)
             flt_mom = compute_moments(Flt_uint8)
-        
+            #print(flt_mom)
+
             flt_avg_10 = flt_mom[1]/flt_mom[0]
             flt_avg_01 = flt_mom[3]/flt_mom[0]
             flt_mu_20 = (flt_mom[2]/flt_mom[0]*1.0)-(flt_avg_10*flt_avg_10)
@@ -182,25 +184,27 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
             ref_mu_02 = (ref_mom[4]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_01)
             ref_mu_11 = (ref_mom[5]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_10)
             
-            params[0][3] = ref_mom[1]/ref_mom[0] - flt_mom[1]/flt_mom[0]
-            params[1][3] = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
+            params[0] = ref_mom[1]/ref_mom[0] - flt_mom[1]/flt_mom[0]
+            params[1] = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
 
             roundness=(flt_mom[2]/flt_mom[0]) / (flt_mom[4]/flt_mom[0])
+            tot_flt_avg_10 += flt_avg_10
+            tot_flt_avg_01 += flt_avg_01
+            tot_flt_mu_20 += flt_mu_20
+            tot_flt_mu_02 += flt_mu_02
+            tot_flt_mu_11 += flt_mu_11
+            tot_ref_avg_10 += ref_avg_10
+            tot_ref_avg_01 += ref_avg_01
+            tot_ref_mu_20 += ref_mu_20
+            tot_ref_mu_02 += ref_mu_02
+            tot_ref_mu_11 += ref_mu_11
+            tot_params1 += params[0]
+            tot_params2 += params[1]
+            tot_roundness += roundness
+            #print(i)
         except:
              continue
-        tot_flt_avg_10 += flt_avg_10
-        tot_flt_avg_01 += flt_avg_01
-        tot_flt_mu_20 += flt_mu_20
-        tot_flt_mu_02 += flt_mu_02
-        tot_flt_mu_11 += flt_mu_11
-        tot_ref_avg_10 += ref_avg_10
-        tot_ref_avg_01 += ref_avg_01
-        tot_ref_mu_20 += ref_mu_20
-        tot_ref_mu_02 += ref_mu_02
-        tot_ref_mu_11 += ref_mu_11
-        tot_params1 += params1
-        tot_params2 += params2
-        tot_roundness += roundness
+        
     tot_flt_avg_10 = tot_flt_avg_10/volume
     tot_flt_avg_01 = tot_flt_avg_01/volume
     tot_flt_mu_20 = tot_flt_mu_20/volume
@@ -224,10 +228,11 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     except Exception as e:
         delta_rho = 0
     
-    return delta_rho, tot_params1, tot_params2
+    #print(tot_params1, tot_params2)
+    return torch.Tensor([delta_rho]), torch.Tensor([tot_params1]), torch.Tensor([tot_params2])
 
 def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
-    params = np.zeros((6,))
+    params = torch.zeros((6,))
     psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume)
     rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2])
     rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2])
@@ -235,7 +240,7 @@ def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
     rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2])
     rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2])
     theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume)
-    params = [tx, ty, 0, np.cos(phi), np.cos(theta), np.cos(psi)]
+    params = [tx, ty, 0, torch.cos(phi), torch.cos(theta), torch.cos(psi)]
     return params
 
 def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
@@ -306,6 +311,8 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
         rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
         rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
         delta_rho=rho_ref-rho_flt
+        if math.fabs(tot_roundness-1.0)<0.3:
+            delta_rho = 0
     except Exception:
         delta_rho = 0
 #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
@@ -501,7 +508,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     global precompute_metric
     start_single_sw = time.time()
     params = torch.empty((6,), device = device)
-    params1 = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
+    params1 = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
+    print(params1)
     for i in range(len(params1)):
         params[i] = params1[i]
     params_cpu = params.cpu()
@@ -514,6 +522,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
     optimal_params = optimize_powell(rng, pa, Ref_uint8_ravel, flt_stack, eref,volume) 
+    print("optimal: ", optimal_params)
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8,to_cuda(params_trans), volume)
     end_single_sw = time.time()
