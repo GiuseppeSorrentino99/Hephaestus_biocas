@@ -761,8 +761,8 @@ def main():
 
     patient_number=args.patient
    
-    print(args.config)
-    print(args)
+    #print(args.config)
+    #print(args)
 
     global compute_metric
     compute_metric = compute_mi
@@ -774,7 +774,7 @@ def main():
 
     compute_wrapper(args, num_threads)
         
-    print("Faber (1+1) python is at the end :)")
+    #print("Faber (1+1) python is at the end :)")
 
 
 

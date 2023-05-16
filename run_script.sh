@@ -33,6 +33,7 @@ PYCODE_oneplusone=one_plus_one_torch.py
 DATASET_FLDR=./
 CT_PATH=Dataset/ST0/SE0
 PET_PATH=Dataset/ST0/SE4
+GOLDEN_PATH=Dataset/ST0/NuovoGold
 RES_PATH=Dataset/OutputClassicMoments
 
 #metric=( MI CC MSE )
@@ -53,8 +54,14 @@ do
         #new
         echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
         python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
-
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
+# 
         echo "python $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
         python3 $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
+# 
+# 
     done
 done

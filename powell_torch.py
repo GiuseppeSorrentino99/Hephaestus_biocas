@@ -553,7 +553,7 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(15):
+    for _ in range(1):
         # print("Nuova Iterazione")
         final_img=[]
         times=[]
@@ -678,7 +678,7 @@ def main():
 
     compute_wrapper(args, num_threads)
         
-    print("Faber Powell python is at the end :)")
+    #print("Faber Powell python is at the end :)")
 
 
 
