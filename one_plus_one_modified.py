@@ -22,6 +22,7 @@ compute_mutual_information = None
 precompute_mutual_information = None
 device = "cuda"
 
+#torch.cuda.empty_cache()
 ref_vals = None
 move_data = None
 

@@ -42,6 +42,7 @@ precompute_metric = None
 device = "cuda"
 ref_vals = None
 move_data = None
+#torch.cuda.empty_cache()
 def no_transfer(input_data):
     return input_data
 

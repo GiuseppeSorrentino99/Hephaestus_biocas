@@ -45,6 +45,7 @@ compute_metric = None
 precompute_metric = None
 device = "cuda"
 
+#torch.cuda.empty_cache()
 ref_vals = None
 move_data = None
 
