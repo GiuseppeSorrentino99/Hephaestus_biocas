@@ -30,6 +30,7 @@ IMG_DIM=512
 PYCODE_Powell=powell_torch.py
 PYCODE_oneplusone=one_plus_one_torch.py
 PYCODE_oneplusone_mod=one_plus_one_modified.py
+PYCODE_oneplusone_Heph=one_plus_one.py
 
 DATASET_FLDR=./
 CT_PATH=Dataset/ST0/SE0
@@ -40,7 +41,7 @@ RES_PATH=Dataset/OutputClassicMoments
 #metric=( MI CC MSE )
 metric=(MI)
 #dev=( cpu cuda )
-dev=(cuda)
+dev=(cuda:0)
 
 for i in "${metric[@]}"
 do
@@ -57,13 +58,13 @@ do
         # python3 $PYCODE_oneplusone_mod -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
         # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
         # python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
-        echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
-        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-        python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
-# 
-        echo "python $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        python3 $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
+#         echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
+#         python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
+#         python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
+#         python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
+# # 
+        echo "python $PYCODE_oneplusone_Heph=one_plus_one.py -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
+        python3 $PYCODE_oneplusone_Heph -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
         python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
         python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
 # 
