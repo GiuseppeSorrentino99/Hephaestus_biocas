@@ -447,9 +447,10 @@ def FastNorm():
                 print('ERRORE')
     else:
         return 10
-def compute_mi(Ref_uint8,Flt_uint8,parent,volume,eref):
-    transform(Flt_uint8,parent,volume)
-    return mutual_information(Ref_uint8,Flt_uint8,eref)   
+def compute_mi(ref_img, flt_img, t_mat, volume, eref):
+    flt_warped = transform(flt_img, to_cuda(t_mat), volume)
+    mi = mutual_information(ref_img, flt_warped.ravel(), eref)
+    return -(mi.cpu()) 
 
 def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     
@@ -463,7 +464,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     m_GrowthFactor = 1.05
     m_ShrinkFactor = np.power(m_GrowthFactor, -0.25)
     m_InitialRadius = 1.01
-    m_MaximumIteration = 100
+    m_MaximumIteration = 200
     m_Stop = False
     m_CurrentCost = 0
     m_CurrentIteration = 0
@@ -472,23 +473,26 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     spaceDimension = 6
     A = torch.eye(spaceDimension)*m_InitialRadius
     f_norm = torch.zeros(spaceDimension)
-    parentPosition = torch.empty(spaceDimension)
+    # parentPosition = torch.empty(spaceDimension)
     
-    parent = to_matrix_complete(parentPosition)
-    parentPosition = estimate_initial(Ref_uint8, Flt_uint8, parent, volume) 
+    # parent = to_matrix_complete(parentPosition)
+    parent = torch.empty((3,4), device=device)
+    estimate_initial(Ref_uint8, Flt_uint8, parent, volume) 
 
-   
+    parent = parent.cpu()
     Ref_uint8_ravel = torch.ravel(Ref_uint8)
     child = torch.empty(spaceDimension)
     delta = torch.empty(spaceDimension)
     childPosition = torch.empty(spaceDimension)
-
-    pvalue = compute_mi(to_cuda(Ref_uint8_ravel), to_cuda(Flt_uint8), parent, volume,eref)
+    parentPosition = torch.empty(spaceDimension)
+    parentPosition=torch.Tensor([parent[0][3],parent[1][3],0, 1.0, 1.0, parent[0][0]])
+    print("initial params", parentPosition)
+    pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, parent, volume,eref)
 
     m_CurrentIteration = 0
     
     for i in range (0,m_MaximumIteration):
-        print(i)
+        #print(i)
         m_CurrentIteration=m_CurrentIteration+1
     
         for j in range (0, spaceDimension):
@@ -496,10 +500,10 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     
         delta = A.matmul(f_norm)#A * f_norm
 
-        child = parentPosition + delta
+        child = torch.Tensor(parentPosition) + delta
         childPosition = to_matrix_complete(child)
-        cvalue = compute_mi(to_cuda(Ref_uint8_ravel), to_cuda(Flt_uint8),parent, volume,eref)
-
+        cvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, to_cuda(childPosition), volume,eref)
+        print("mi: ", cvalue)
 
         adjust = m_ShrinkFactor
     
@@ -520,7 +524,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
             
         m_CurrentCost = pvalue
         m_FrobeniusNorm = np.linalg.norm(A,'fro')
-    
+        #print("parentpos: ", parentPosition)
         if(m_FrobeniusNorm <= m_Epsilon):
             break
     
@@ -529,8 +533,8 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         for c in range(0, spaceDimension):
             for r in range(0,spaceDimension):
                 A[r][c] += alpha * delta[r] * f_norm[c]
-        print(child)
-    print(parentPosition)
+        #print(child)
+    print("final params", parentPosition)
     return (parentPosition)
 
 

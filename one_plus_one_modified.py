@@ -124,7 +124,7 @@ def to_matrix_complete(vector_params):
     mat_params=torch.empty((3,4))
     mat_params[0][3]=vector_params[0] 
     mat_params[1][3]=vector_params[1] 
-    mat_params[2][3]=vector_params[2]
+    mat_params[2][3]=0#vector_params[2]
     cos_phi = vector_params[3]
     cos_theta = vector_params[4]
     cos_psi = vector_params[5]
