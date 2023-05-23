@@ -36,6 +36,7 @@ import statistics
 import argparse
 import kornia
 import torch
+import gc
 
 compute_metric = None
 precompute_metric = None
@@ -530,7 +531,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     with open(filename, 'a') as file2:
                 file2.write("%s\n" % (end_single_sw - start_single_sw))
  
-    return (flt_transform)
+    return (params_trans)
 
 # def register_images(Ref_uint8, Flt_uint8):
 #     params = torch.empty((2,3), device=device)
@@ -570,14 +571,19 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         it_time = 0.0
         hist_dim = 256
         dim = 512
-        global ref_vals
-        ref_vals = torch.ones(dim*dim*volume, dtype=torch.int, device=device)
+        
         global move_data
         move_data = no_transfer if device=='cpu' else to_cuda
+        left = 90 #int(volume/2 - subvolume/2)
+        right = 150 #int(volume/2 + subvolume/2)
+        print("left", left)
+        print("right", right)
+        global ref_vals
+        ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
         refs = []
         flts = []
         couples = 0
-        for c,ij in enumerate(zip(CT, PET)):
+        for c,ij in enumerate(zip(CT[left:right], PET[left:right])):
             i = ij[0]
             j = ij[1]  
             ref = pydicom.dcmread(i)
@@ -596,15 +602,58 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
             refs.append(Ref_uint8)
             flts.append(Flt_uint8)
             couples = couples + 1
-            if couples >= volume:
+            if couples >= len(CT[left:right]):
                 break
             
         refs3D = torch.cat(refs)
         flts3D = torch.cat(flts)
-        refs3D = torch.reshape(refs3D,(volume,512,512))
-        flts3D = torch.reshape(flts3D,(volume,512,512))
+        refs3D = torch.reshape(refs3D,(len(CT[left:right]),512,512))
+        flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
         start_time = time.time()
-        f_img=(register_images(filename, refs3D, flts3D, volume))
+        transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
+        print(transform_matrix.shape)
+        N = 4
+        for index in range(N):
+            couples = 0
+            refs = []
+            flts = []
+            for c,ij in enumerate(zip(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))])):
+                i = ij[0]
+                j = ij[1]
+
+                ref = pydicom.dcmread(i)
+                Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+                Ref_img[Ref_img==-2000]=1
+
+                flt = pydicom.dcmread(j)
+                Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+
+                Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
+                Ref_uint8 = Ref_img.round().type(torch.uint8)
+
+                Flt_img = (Flt_img - Flt_img.min())/(Flt_img.max() - Flt_img.min())*255
+                Flt_uint8 = Flt_img.round().type(torch.uint8)
+                refs.append(Ref_uint8)
+                flts.append(Flt_uint8)
+                del ref
+                del flt
+                del Flt_img
+                del Ref_img
+                gc.collect()
+                couples = couples + 1
+                #if couples >= int(volume / N):
+                #    break
+            refs3D = torch.cat(refs)
+            flts3D = torch.cat(flts)
+            refs3D = torch.reshape(refs3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+            flts3D = torch.reshape(flts3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+            del refs
+            del flts
+            gc.collect()
+            flt_transform = transform(flts3D, to_cuda(transform_matrix), len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+            flt_transform = flt_transform.cpu()
+            save_data(flt_transform, PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], curr_res, len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+        """
         final_img = f_img.cpu()
         end_time= time.time()
         it_time = (end_time - start_time)
@@ -617,7 +666,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         df.to_csv(df_path, index=False)
         times_df.to_csv(times_df_path, index=False)
         save_data(final_img,PET,curr_res,volume)
-
+        """
 def compute_wrapper(args, num_threads=1):
     config=args.config
     
