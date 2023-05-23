@@ -107,11 +107,11 @@ else:
 
 Gold.sort()
 Test.sort()
-#print(Gold)
-#print(Test)
+# print(Gold)
+# print(Test)
 for i,j in zip(Gold, Test):
-    #print(i)
-    #print(j)
+    # print(i)
+    # print(j)
     
     curr_g_nmbr.append(((i.split('/')).pop()).split('.')[0][2:5])
     curr_test_nmbr.append(((j.split('/')).pop()).split('.')[0][2:5])

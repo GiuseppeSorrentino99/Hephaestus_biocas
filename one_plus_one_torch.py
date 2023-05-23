@@ -1,28 +1,5 @@
-# /******************************************
-# *MIT License
-# *
-# *Copyright (c) [2021] [Eleonora D'Arnese, Emanuele Del Sozzo, Davide Conficconi,  Marco Domenico Santambrogio]
-# *
-# *Permission is hereby granted, free of charge, to any person obtaining a copy
-# *of this software and associated documentation files (the "Software"), to deal
-# *in the Software without restriction, including without limitation the rights
-# *to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# *copies of the Software, and to permit persons to whom the Software is
-# *furnished to do so, subject to the following conditions:
-# *
-# *The above copyright notice and this permission notice shall be included in all
-# *copies or substantial portions of the Software.
-# *
-# *THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# *IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# *FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# *AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# *LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# *SOFTWARE.
-# ******************************************/
-
 import os
+import re
 import pydicom
 import cv2
 import numpy as np
@@ -122,90 +99,7 @@ def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
     
     return(mutualinfo)
 
-# def precompute_cross_correlation(Ref_uint8_ravel):
 
-#     return torch.sum(Ref_uint8_ravel * Ref_uint8_ravel)
-
-    
-# def cross_correlation(Ref_uint8_ravel, Flt_uint8_ravel, cc_ref):
-    
-#     cc_ref_flt = torch.sum(Ref_uint8_ravel * Flt_uint8_ravel)
-#     cc_flt = torch.sum(Flt_uint8_ravel * Flt_uint8_ravel)
-#     return - cc_ref_flt/torch.sqrt(cc_ref*cc_flt)
-
-# def precompute_mean_squared_error(Ref_uint8_ravel):
-#     pass
-
-# def mean_squared_error(Ref_uint8_ravel, Flt_uint8_ravel, mse_ref):
-    
-#     return torch.sum((Ref_uint8_ravel - Flt_uint8_ravel)**2)
-
-# def to_matrix_blocked(vector_params):
-#     mat_params=torch.empty((2,3))
-#     mat_params[0][2]=vector_params[0]
-#     mat_params[1][2]=vector_params[1]    
-#     if vector_params[2] > 1 or vector_params[2] < -1:
-#         mat_params[0][0]=1 #cos_teta
-#         mat_params[1][1]=1 #cos_teta
-#         mat_params[0][1]=0
-#         mat_params[1][0]=0
-#     else:
-#         mat_params[0][0]=vector_params[2] #cos_teta
-#         mat_params[1][1]=vector_params[2] #cos_teta
-#         mat_params[0][1]=torch.sqrt(1-(vector_params[2]**2))
-#         mat_params[1][0]=-mat_params[0][1]
-#     return (mat_params)
-
-# def compute_moments(img):
-#     moments = torch.empty(6, device=device)
-#     l = torch.arange(img.shape[0], device=device)
-#     moments[0] = torch.sum(img) # m00
-#     moments[1] = torch.sum(img * l) # m10
-#     moments[2] = torch.sum(img * (l**2)) # m20
-#     moments[3] = torch.sum(img * l.reshape((img.shape[0], 1)) ) # m01
-#     moments[4] = torch.sum(img * (l.reshape((img.shape[0], 1)))**2 ) # m02
-#     moments[5] = torch.sum(img * l * l.reshape((img.shape[0], 1))) # m11
-#     return moments
-
-# def estimate_initial(Ref_uint8, Flt_uint8, params):
-#     #print("ESTIMATE INITIAL")
-#     #ref_mom =cv2.moments(Ref_uint8.numpy())
-#     #flt_mom = cv2.moments(Flt_uint8.numpy())
-    
-#     ref_mom = compute_moments(Ref_uint8)
-#     flt_mom = compute_moments(Flt_uint8)
-        
-#     flt_avg_10 = flt_mom[1]/flt_mom[0]
-#     flt_avg_01 = flt_mom[3]/flt_mom[0]
-#     flt_mu_20 = (flt_mom[2]/flt_mom[0]*1.0)-(flt_avg_10*flt_avg_10)
-#     flt_mu_02 = (flt_mom[4]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_01)
-#     flt_mu_11 = (flt_mom[5]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_10)
-
-#     ref_avg_10 = ref_mom[1]/ref_mom[0]
-#     ref_avg_01 = ref_mom[3]/ref_mom[0]
-#     ref_mu_20 = (ref_mom[2]/ref_mom[0]*1.0)-(ref_avg_10*ref_avg_10)
-#     ref_mu_02 = (ref_mom[4]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_01)
-#     ref_mu_11 = (ref_mom[5]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_10)
-    
-#     params[0][2] = ref_mom[1]/ref_mom[0]-flt_mom[1]/flt_mom[0]
-#     params[1][2] = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
-    
-#     rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
-#     rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
-#     delta_rho=rho_ref-rho_flt
-    
-#     roundness=(flt_mom[2]/flt_mom[0]) / (flt_mom[4]/flt_mom[0])
-#     if math.fabs(roundness-1.0)>=0.3:
-#         params[0][0]= torch.cos(delta_rho)
-#         params[0][1] = -torch.sin(delta_rho)
-#         params[1][0] = torch.sin(delta_rho)
-#         params[1][1] = torch.cos(delta_rho)
-#     else:
-#         params[0][0]= 1.0
-#         params[0][1] = 0.0
-#         params[1][0] = 0.0
-#         params[1][1] = 1.0
-#     return (params)
 
 def NormalVariateGenerator():
 
@@ -217,7 +111,7 @@ def NormalVariateGenerator():
         return FastNorm();
 
 def SignedShiftXOR(x):
-    uirs = np.uint32(x);
+    uirs = np.uint32(x)
     c=np.int32((uirs << 1) ^ 333556017) if np.int32(x <= 0) else np.int32(uirs << 1)
     return c
 
@@ -265,11 +159,11 @@ def FastNorm():
                 if (r < 0):
                     r = ~r
                 tz = -2.0 * np.log((r + 0.5) * m_Rcons)
-                ts += tz;
-                tz = np.sqrt(tz / tr);
-                m_Vec1[p] = (int)(m_Scale * tx * tz);
+                ts += tz
+                tz = np.sqrt(tz / tr)
+                m_Vec1[p] = (int)(m_Scale * tx * tz)
                 p=p+1
-                m_Vec1[p] = (int)(m_Scale * ty * tz);
+                m_Vec1[p] = (int)(m_Scale * ty * tz)
                 p=p+1
                 if (p >= m_TLEN):
                     break
@@ -418,7 +312,7 @@ def to_matrix_complete(vector_params):
     mat_params[0][2] = sin_phi_sin_psi + cos_phi * sin_theta_cos_psi
     mat_params[1][2] = -sin_phi_cos_psi + cos_phi * sin_theta_sin_psi
     mat_params[2][2] = cos_phi_cos_theta
-    print(mat_params)
+    # print(mat_params)
     return (mat_params)
 
 
@@ -495,14 +389,14 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     tot_params1 = tot_params1/volume
     tot_params2 = tot_params2/volume
     tot_roundness = tot_roundness/volume
-    try:
-        rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
-        rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
-        delta_rho=rho_ref-rho_flt
-        if math.fabs(tot_roundness-1.0)<0.3:
-            delta_rho = 0
-    except Exception:
-        delta_rho = 0
+    # try:
+    #     rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
+    #     rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
+    #     delta_rho=rho_ref-rho_flt
+    #     if math.fabs(tot_roundness-1.0)<0.3:
+    #         delta_rho = 0
+    # except Exception:
+    #     delta_rho = 0
 #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
     params[0][3] = tot_params1
     params[1][3] = tot_params2
@@ -536,18 +430,9 @@ def compute_mi(ref_img, flt_img, t_mat, eref, volume):
     flt_warped = transform(flt_img, to_cuda(t_mat), volume)
     mi = mutual_information(ref_img, flt_warped.ravel(), eref)
     mi = -(mi.cpu())
-    print(mi)
+    #print(mi)
     return mi
 
-# def compute_cc(ref_img, flt_img, t_mat, cc_ref):
-#     flt_warped = transform(flt_img, t_mat)
-#     cc = cross_correlation(ref_img, flt_warped.ravel(), cc_ref)
-#     return cc.cpu()
-
-# def compute_mse(ref_img, flt_img, t_mat, mse_ref):
-#     flt_warped = transform(flt_img, t_mat)
-#     mse = mean_squared_error(ref_img, flt_warped.ravel(), mse_ref)
-#     return mse.cpu()
 
 def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     tot_flt_avg_10 = 0
@@ -675,17 +560,14 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     child = torch.empty(spaceDimension)
     delta = torch.empty(spaceDimension)
     
-    #parentPosition = estimate_initial3D(Ref_uint8, Flt_uint8, volume)
     parent = torch.zeros((3,4), device = device)
 
     estimate_initial(Ref_uint8, Flt_uint8, parent, volume)
     parent = parent.cpu()
+
     parentPosition = torch.empty((6,))
     parentPosition=torch.Tensor([parent[0][3],parent[1][3],0, 1.0, 1.0, parent[0][0]])
-    print("initial params", parentPosition)
-    #print("after", parentPosition)
     Ref_uint8_ravel = Ref_uint8.ravel()#.double()
-    #parent = to_matrix_complete(parentPosition)
     pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(parent), eref, volume)
     childPosition = torch.empty(spaceDimension)
 
@@ -700,7 +582,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         delta = A.matmul(f_norm)#A * f_norm
         child = torch.Tensor(parentPosition) + delta
         childPosition = to_matrix_complete(child)
-        print(parentPosition)
+        # print(parentPosition)
         cvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(childPosition), eref, volume)
 
         adjust = m_ShrinkFactor
@@ -732,7 +614,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         for c in range(0, spaceDimension):
             for r in range(0,spaceDimension):
                 A[r][c] += alpha * delta[r] * f_norm[c];
-    print("final params", parentPosition)
+    #print("final params", parentPosition)
     return (parentPosition) 
 
 def save_data(OUT_STAK, name, res_path, volume):
@@ -765,7 +647,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     return (flt_transform)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(1):
+    for _ in range(27):
         final_img=[]
         times=[]
         t = 0.0
@@ -814,12 +696,12 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         it_time = (end_time - start_time)
         times.append(it_time)
         t=t+it_time
-        df = pd.DataFrame([t, np.mean(times), np.std(times)],columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        times_df = pd.DataFrame(times,columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        df_path = os.path.join(curr_res,'Time_powll_%02d.csv' % (t_id))
-        times_df_path = os.path.join(curr_res,'Img_powll_%02d.csv' % (t_id))
-        df.to_csv(df_path, index=False)
-        times_df.to_csv(times_df_path, index=False)
+        # df = pd.DataFrame([t, np.mean(times), np.std(times)],columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
+        # times_df = pd.DataFrame(times,columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
+        # df_path = os.path.join(curr_res,'Time_powll_%02d.csv' % (t_id))
+        # times_df_path = os.path.join(curr_res,'Img_powll_%02d.csv' % (t_id))
+        # df.to_csv(df_path, index=False)
+        # times_df.to_csv(times_df_path, index=False)
         save_data(final_img,PET,curr_res,volume)
 
 def compute_wrapper(args, num_threads=1):
@@ -835,10 +717,8 @@ def compute_wrapper(args, num_threads=1):
         os.makedirs(curr_res,exist_ok=True)
         CT=glob.glob(curr_ct+'/*dcm')
         PET=glob.glob(curr_pet+'/*dcm')
-        #print(curr_ct)
-        #print(curr_pet)
-        PET.sort()
-        CT.sort()
+        PET.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
+        CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
         # print(images_per_thread)

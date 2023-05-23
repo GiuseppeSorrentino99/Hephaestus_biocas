@@ -23,6 +23,7 @@
 # ******************************************/
 
 import os
+import re
 import pydicom
 import cv2
 import numpy as np
@@ -39,7 +40,7 @@ import torch
 
 compute_metric = None
 precompute_metric = None
-device = "cuda"
+device = "cuda:0"
 ref_vals = None
 move_data = None
 #torch.cuda.empty_cache()
@@ -399,7 +400,7 @@ def precompute_mutual_information(Ref_uint8_ravel):
 
 def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
     
-    if(device == "cuda"):
+    if(device == "cuda:0"):
         idx_joint = torch.stack((Ref_uint8_ravel, Flt_uint8_ravel)).long()
         j_h_init = torch.sparse.IntTensor(idx_joint, ref_vals, torch.Size([hist_dim, hist_dim])).to_dense()/Ref_uint8_ravel.numel()
     else:
@@ -562,7 +563,7 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(1):
+    for _ in range(20):
         # print("Nuova Iterazione")
         final_img=[]
         times=[]
@@ -631,10 +632,8 @@ def compute_wrapper(args, num_threads=1):
         os.makedirs(curr_res,exist_ok=True)
         CT=glob.glob(curr_ct+'/*dcm')
         PET=glob.glob(curr_pet+'/*dcm')
-        #print(curr_ct)
-        #print(curr_pet)
-        PET.sort()
-        CT.sort()
+        PET.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
+        CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
         # print(images_per_thread)
@@ -664,7 +663,7 @@ def main():
     parser.add_argument("-px", "--prefix", nargs='?', help='prefix Path of patients folder', default='./')
     parser.add_argument("-im", "--image_dimension", nargs='?', help='Target images dimensions', default=512, type=int)
     parser.add_argument("-c", "--config", nargs='?', help='prefix Path of patients folder', default='./')
-    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda'], default='cpu')
+    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda:0'], default='cpu')
     parser.add_argument("-vol", "--volume", nargs='?', help='Volume',type = int, default=512)
     parser.add_argument("-f", "--filename", nargs='?', help='Filename', default="test.csv")
 
