@@ -538,7 +538,7 @@ def compute_mi(ref_img, flt_img, t_mat, eref, volume):
     flt_warped = transform(flt_img, to_cuda(t_mat), volume)
     mi = mutual_information(ref_img, flt_warped.ravel(), eref)
     mi = -(mi.cpu())
-    print(mi)
+    #print(mi)
     return mi
 
 # def compute_cc(ref_img, flt_img, t_mat, cc_ref):
@@ -684,7 +684,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     parent = parent.cpu()
     parentPosition = torch.empty((6,))
     parentPosition=torch.Tensor([parent[0][3],parent[1][3],0, 1.0, 1.0, parent[0][0]])
-    print("initial params", parentPosition)
+    #print("initial params", parentPosition)
     #print("after", parentPosition)
     Ref_uint8_ravel = Ref_uint8.ravel()#.double()
     #parent = to_matrix_complete(parentPosition)
@@ -702,7 +702,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         delta = A.matmul(f_norm)#A * f_norm
         child = torch.Tensor(parentPosition) + delta
         childPosition = to_matrix_complete(child)
-        print(parentPosition)
+        #print(parentPosition)
         cvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(childPosition), eref, volume)
 
         adjust = m_ShrinkFactor
@@ -734,7 +734,7 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         for c in range(0, spaceDimension):
             for r in range(0,spaceDimension):
                 A[r][c] += alpha * delta[r] * f_norm[c];
-    print("final params", parentPosition)
+    #print("final params", parentPosition)
     return (parentPosition) 
 
 def save_data(OUT_STAK, name, res_path, volume):
@@ -756,7 +756,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
     optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref)
-    print("optimal: ", optimal_params) 
+    #print("optimal: ", optimal_params) 
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8, to_cuda(params_trans),volume)
     end_single_sw = time.time()
@@ -767,8 +767,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     return (params_trans)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(1):
-        # print("Nuova Iterazione")
+    for iteration_index in range(30):
+        print("iteration: ", iteration_index)
         final_img=[]
         times=[]
         t = 0.0
@@ -780,8 +780,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         move_data = no_transfer if device=='cpu' else to_cuda
         left = 90 #int(volume/2 - subvolume/2)
         right = 150 #int(volume/2 + subvolume/2)
-        print("left", left)
-        print("right", right)
+        #print("left", left)
+        #print("right", right)
         global ref_vals
         ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
         refs = []
@@ -815,7 +815,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
         start_time = time.time()
         transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
-        print(transform_matrix.shape)
+        #print(transform_matrix.shape)
         N = 4
         for index in range(N):
             couples = 0

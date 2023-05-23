@@ -509,8 +509,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     global precompute_metric
     start_single_sw = time.time()
     params = torch.empty((6,), device = device)
-    params1 = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
-    print(params1)
+    params1 = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
+    #print(params1)
     for i in range(len(params1)):
         params[i] = params1[i]
     params_cpu = params.cpu()
@@ -523,7 +523,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
     optimal_params = optimize_powell(rng, pa, Ref_uint8_ravel, flt_stack, eref,volume) 
-    print("optimal: ", optimal_params)
+    #print("optimal: ", optimal_params)
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8,to_cuda(params_trans), volume)
     end_single_sw = time.time()
@@ -563,7 +563,8 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(1):
+    for iteration_index in range(1):
+        print("iteration ", iteration_index)
         # print("Nuova Iterazione")
         final_img=[]
         times=[]
@@ -576,8 +577,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         move_data = no_transfer if device=='cpu' else to_cuda
         left = 90 #int(volume/2 - subvolume/2)
         right = 150 #int(volume/2 + subvolume/2)
-        print("left", left)
-        print("right", right)
+        #print("left", left)
+        #print("right", right)
         global ref_vals
         ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
         refs = []
@@ -611,7 +612,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
         start_time = time.time()
         transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
-        print(transform_matrix.shape)
+        #print(transform_matrix.shape)
         N = 4
         for index in range(N):
             couples = 0
