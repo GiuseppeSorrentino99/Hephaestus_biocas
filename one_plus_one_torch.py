@@ -36,6 +36,7 @@ import statistics
 import argparse
 import kornia
 import torch
+import gc
 
 m_Gaussfaze=1
 m_Gausssave=np.zeros((1,8*128))
@@ -43,7 +44,7 @@ m_GScale=1.0/30000000.0
 
 compute_metric = None
 precompute_metric = None
-device = "cuda:0"
+device = "cuda"
 
 #torch.cuda.empty_cache()
 ref_vals = None
@@ -418,7 +419,7 @@ def to_matrix_complete(vector_params):
     mat_params[0][2] = sin_phi_sin_psi + cos_phi * sin_theta_cos_psi
     mat_params[1][2] = -sin_phi_cos_psi + cos_phi * sin_theta_sin_psi
     mat_params[2][2] = cos_phi_cos_theta
-    print(mat_params)
+    #print(mat_params)
     return (mat_params)
 
 
@@ -762,26 +763,30 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     with open(filename, 'a') as file2:
                 file2.write("%s\n" % (end_single_sw - start_single_sw))
  
-    return (flt_transform)
+    return (params_trans)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
     for _ in range(1):
+        # print("Nuova Iterazione")
         final_img=[]
         times=[]
         t = 0.0
         it_time = 0.0
         hist_dim = 256
         dim = 512
-        #print(CT)
-        #print(PET)
-        global ref_vals
-        ref_vals = torch.ones(dim*dim*volume, dtype=torch.int, device=device)
+        
         global move_data
         move_data = no_transfer if device=='cpu' else to_cuda
+        left = 90 #int(volume/2 - subvolume/2)
+        right = 150 #int(volume/2 + subvolume/2)
+        print("left", left)
+        print("right", right)
+        global ref_vals
+        ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
         refs = []
         flts = []
         couples = 0
-        for c,ij in enumerate(zip(CT, PET)):
+        for c,ij in enumerate(zip(CT[left:right], PET[left:right])):
             i = ij[0]
             j = ij[1]  
             ref = pydicom.dcmread(i)
@@ -800,27 +805,59 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
             refs.append(Ref_uint8)
             flts.append(Flt_uint8)
             couples = couples + 1
-            if couples >= volume:
+            if couples >= len(CT[left:right]):
                 break
             
         refs3D = torch.cat(refs)
         flts3D = torch.cat(flts)
-        refs3D = torch.reshape(refs3D,(volume,512,512))
-        flts3D = torch.reshape(flts3D,(volume,512,512))
+        refs3D = torch.reshape(refs3D,(len(CT[left:right]),512,512))
+        flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
         start_time = time.time()
-        f_img=(register_images(filename, refs3D, flts3D, volume))
-        final_img = f_img.cpu()
-        end_time= time.time()
-        it_time = (end_time - start_time)
-        times.append(it_time)
-        t=t+it_time
-        df = pd.DataFrame([t, np.mean(times), np.std(times)],columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        times_df = pd.DataFrame(times,columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        df_path = os.path.join(curr_res,'Time_powll_%02d.csv' % (t_id))
-        times_df_path = os.path.join(curr_res,'Img_powll_%02d.csv' % (t_id))
-        df.to_csv(df_path, index=False)
-        times_df.to_csv(times_df_path, index=False)
-        save_data(final_img,PET,curr_res,volume)
+        transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
+        print(transform_matrix.shape)
+        N = 4
+        for index in range(N):
+            couples = 0
+            refs = []
+            flts = []
+            for c,ij in enumerate(zip(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))])):
+                i = ij[0]
+                j = ij[1]
+
+                ref = pydicom.dcmread(i)
+                Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+                Ref_img[Ref_img==-2000]=1
+
+                flt = pydicom.dcmread(j)
+                Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+
+                Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
+                Ref_uint8 = Ref_img.round().type(torch.uint8)
+
+                Flt_img = (Flt_img - Flt_img.min())/(Flt_img.max() - Flt_img.min())*255
+                Flt_uint8 = Flt_img.round().type(torch.uint8)
+                refs.append(Ref_uint8)
+                flts.append(Flt_uint8)
+                del ref
+                del flt
+                del Flt_img
+                del Ref_img
+                gc.collect()
+                couples = couples + 1
+                #if couples >= int(volume / N):
+                #    break
+            refs3D = torch.cat(refs)
+            flts3D = torch.cat(flts)
+            refs3D = torch.reshape(refs3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+            flts3D = torch.reshape(flts3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+            del refs
+            del flts
+            gc.collect()
+            flt_transform = transform(flts3D, to_cuda(transform_matrix), len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+            flt_transform = flt_transform.cpu()
+            save_data(flt_transform, PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], curr_res, len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+    
+    
 
 def compute_wrapper(args, num_threads=1):
     config=args.config
@@ -868,7 +905,7 @@ def main():
     parser.add_argument("-px", "--prefix", nargs='?', help='prefix Path of patients folder', default='./')
     parser.add_argument("-im", "--image_dimension", nargs='?', help='Target images dimensions', default=512, type=int)
     parser.add_argument("-c", "--config", nargs='?', help='prefix Path of patients folder', default='./')
-    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda:0'], default='cuda:0')
+    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda'], default='cuda:0')
     parser.add_argument("-vol", "--volume", nargs='?', help='Volume',type = int, default=512)
     parser.add_argument("-f", "--filename", nargs='?', help='Filename', default="test.csv")
 
