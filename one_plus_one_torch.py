@@ -28,6 +28,7 @@ import cv2
 import numpy as np
 import math
 import glob
+import re
 import time
 import pandas as pd
 from torch.multiprocessing import Pool, Process, set_start_method
@@ -105,7 +106,7 @@ def precompute_mutual_information(Ref_uint8):
 
 def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
     
-    if(device == "cuda:0"):
+    if(device == "cuda"):
         ref_vals = torch.ones(Ref_uint8_ravel.numel(), dtype=torch.int, device=device)
         idx_joint = torch.stack((Ref_uint8_ravel, Flt_uint8_ravel)).long()
         j_h_init = torch.sparse.IntTensor(idx_joint, ref_vals, torch.Size([hist_dim, hist_dim])).to_dense()/Ref_uint8_ravel.numel()
@@ -496,14 +497,14 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     tot_params1 = tot_params1/volume
     tot_params2 = tot_params2/volume
     tot_roundness = tot_roundness/volume
-    try:
-        rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
-        rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
-        delta_rho=rho_ref-rho_flt
-        if math.fabs(tot_roundness-1.0)<0.3:
-            delta_rho = 0
-    except Exception:
-        delta_rho = 0
+    # try:
+    #     rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
+    #     rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
+    #     delta_rho=rho_ref-rho_flt
+    #     if math.fabs(tot_roundness-1.0)<0.3:
+    #         delta_rho = 0
+    # except Exception:
+    #     delta_rho = 0
 #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
     params[0][3] = tot_params1
     params[1][3] = tot_params2
@@ -874,8 +875,8 @@ def compute_wrapper(args, num_threads=1):
         PET=glob.glob(curr_pet+'/*dcm')
         #print(curr_ct)
         #print(curr_pet)
-        PET.sort()
-        CT.sort()
+        PET.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
+        CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
         # print(images_per_thread)
@@ -905,7 +906,7 @@ def main():
     parser.add_argument("-px", "--prefix", nargs='?', help='prefix Path of patients folder', default='./')
     parser.add_argument("-im", "--image_dimension", nargs='?', help='Target images dimensions', default=512, type=int)
     parser.add_argument("-c", "--config", nargs='?', help='prefix Path of patients folder', default='./')
-    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda'], default='cuda:0')
+    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument("-vol", "--volume", nargs='?', help='Volume',type = int, default=512)
     parser.add_argument("-f", "--filename", nargs='?', help='Filename', default="test.csv")
 

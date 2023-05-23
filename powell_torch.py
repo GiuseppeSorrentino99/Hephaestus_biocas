@@ -21,7 +21,7 @@
 # *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # *SOFTWARE.
 # ******************************************/
-
+import re
 import os
 import pydicom
 import cv2
@@ -682,8 +682,8 @@ def compute_wrapper(args, num_threads=1):
         PET=glob.glob(curr_pet+'/*dcm')
         #print(curr_ct)
         #print(curr_pet)
-        PET.sort()
-        CT.sort()
+        PET.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
+        CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
         # print(images_per_thread)
