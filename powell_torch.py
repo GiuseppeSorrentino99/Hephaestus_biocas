@@ -43,7 +43,7 @@ precompute_metric = None
 device = "cuda"
 ref_vals = None
 move_data = None
-#torch.cuda.empty_cache()
+torch.cuda.empty_cache()
 def no_transfer(input_data):
     return input_data
 
@@ -563,7 +563,7 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for iteration_index in range(1):
+    for iteration_index in range(30):
         print("iteration ", iteration_index)
         # print("Nuova Iterazione")
         final_img=[]

@@ -767,7 +767,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     return (params_trans)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for iteration_index in range(30):
+    for iteration_index in range(21):
         print("iteration: ", iteration_index)
         final_img=[]
         times=[]
