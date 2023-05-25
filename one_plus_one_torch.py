@@ -778,8 +778,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         
         global move_data
         move_data = no_transfer if device=='cpu' else to_cuda
-        left = 70 #int(volume/2 - subvolume/2)
-        right = 170 #int(volume/2 + subvolume/2)
+        left = 30 #int(volume/2 - subvolume/2)
+        right = 210 #int(volume/2 + subvolume/2)
         #print("left", left)
         #print("right", right)
         global ref_vals
