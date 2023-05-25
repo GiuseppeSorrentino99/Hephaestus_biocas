@@ -767,8 +767,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     return (params_trans)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for iteration_index in range(21):
-        print("iteration: ", iteration_index)
+    for iteration_index in range(1):
+        print("iteration 1p1")
         final_img=[]
         times=[]
         t = 0.0
@@ -778,8 +778,8 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         
         global move_data
         move_data = no_transfer if device=='cpu' else to_cuda
-        left = 90 #int(volume/2 - subvolume/2)
-        right = 150 #int(volume/2 + subvolume/2)
+        left = 20 #int(volume/2 - subvolume/2)
+        right = 210 #int(volume/2 + subvolume/2)
         #print("left", left)
         #print("right", right)
         global ref_vals
