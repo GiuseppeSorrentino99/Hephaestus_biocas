@@ -330,8 +330,13 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     # params[2][2] = 1
     # params[0][2] = params[0][3] = 0
     # params[2][0] = params[2][1] = 0
+<<<<<<< HEAD
     
     return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.tensor([delta_rho]))]
+=======
+    #print(delta_rho)
+    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(torch.Tensor([delta_rho]))]
+>>>>>>> 3832d83920e3188665c6480a0c62dcbf691dcd7b
 
 def my_squared_hist2d_t(sample, bins, smin, smax):
     D, N = sample.shape
@@ -563,8 +568,14 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
+<<<<<<< HEAD
     for iteration_index in range(1):
         print("iteration pow")
+=======
+    #for (lef,rig)in reversed([(80, 160)]):
+        #
+        #print("iteration ", lef, rig)
+>>>>>>> 3832d83920e3188665c6480a0c62dcbf691dcd7b
         # print("Nuova Iterazione")
         final_img=[]
         times=[]
@@ -575,8 +586,13 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
         
         global move_data
         move_data = no_transfer if device=='cpu' else to_cuda
+<<<<<<< HEAD
         left = 30 #int(volume/2 - subvolume/2)
         right = 190 #int(volume/2 + subvolume/2)
+=======
+        left = 40 #int(volume/2 - subvolume/2)
+        right = 200 #int(volume/2 + subvolume/2)
+>>>>>>> 3832d83920e3188665c6480a0c62dcbf691dcd7b
         #print("left", left)
         #print("right", right)
         global ref_vals
