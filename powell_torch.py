@@ -313,9 +313,9 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
         rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
         delta_rho=rho_ref-rho_flt
         if math.fabs(tot_roundness-1.0)<0.3:
-            delta_rho = 0
+            delta_rho = torch.Tensor([0])
     except Exception:
-        delta_rho = 0
+        delta_rho = torch.Tensor([0])
 #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
     # if math.fabs(tot_roundness-1.0)>=0.3:
     #     params[0][0]= math.cos(delta_rho)
@@ -331,7 +331,7 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
     # params[0][2] = params[0][3] = 0
     # params[2][0] = params[2][1] = 0
     
-    return [tot_params1, tot_params2, 0, 1, 1, torch.cos(delta_rho)]
+    return torch.Tensor([tot_params1, tot_params2, 0, 1, 1, torch.cos(delta_rho)])
 
 def my_squared_hist2d_t(sample, bins, smin, smax):
     D, N = sample.shape
@@ -509,8 +509,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     global precompute_metric
     start_single_sw = time.time()
     params = torch.empty((6,), device = device)
-    params1 = estimate_initial3D(Ref_uint8, Flt_uint8, params, volume)
-    print(params1)
+    params1 = estimate_initial(Ref_uint8, Flt_uint8, params, volume)
+    #print(params1)
     for i in range(len(params1)):
         params[i] = params1[i]
     params_cpu = params.cpu()
@@ -523,7 +523,7 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
     optimal_params = optimize_powell(rng, pa, Ref_uint8_ravel, flt_stack, eref,volume) 
-    print("optimal: ", optimal_params)
+    #print("optimal: ", optimal_params)
     params_trans=to_matrix_complete(optimal_params)
     flt_transform = transform(Flt_uint8,to_cuda(params_trans), volume)
     end_single_sw = time.time()
@@ -563,7 +563,7 @@ def save_data(OUT_STAK, name, res_path, volume):
 
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(20):
+    for _ in range(1):
         # print("Nuova Iterazione")
         final_img=[]
         times=[]
