@@ -768,10 +768,8 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     return (params_trans)
 
 def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    #for (lef,rig)in reversed([(80, 160)]):
-        #
-        #print("iteration ", lef, rig)
-        # print("Nuova Iterazione")
+    for iteration_index in range(1):
+        print("iteration 1p1")
         final_img=[]
         times=[]
         t = 0.0
