@@ -40,7 +40,8 @@ import torch
 
 compute_metric = None
 precompute_metric = None
-device = "cuda:0"
+#device = "cuda:0"
+device = "cpu"
 ref_vals = None
 move_data = None
 #torch.cuda.empty_cache()
@@ -585,8 +586,9 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
             Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
             Ref_img[Ref_img==-2000]=1
             
-            flt = pydicom.dcmread(j)
-            Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+            flt = cv2.imread(j)
+            flt = cv2.cvtColor(flt, cv2.COLOR_BGR2GRAY)
+            Flt_img = torch.tensor(flt.astype(np.int16), dtype=torch.int16, device=device)
 
             Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
             Ref_uint8 = Ref_img.round().type(torch.uint8)
@@ -631,7 +633,7 @@ def compute_wrapper(args, num_threads=1):
         curr_res = os.path.join("",args.res_path)
         os.makedirs(curr_res,exist_ok=True)
         CT=glob.glob(curr_ct+'/*dcm')
-        PET=glob.glob(curr_pet+'/*dcm')
+        PET=glob.glob(curr_pet+'/*png')
         PET.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)

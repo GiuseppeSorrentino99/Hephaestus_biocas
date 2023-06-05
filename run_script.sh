@@ -41,7 +41,8 @@ RES_PATH=Dataset/OutputClassicMoments
 #metric=( MI CC MSE )
 metric=(MI)
 #dev=( cpu cuda )
-dev=(cuda:0)
+#dev=(cuda:0)
+dev=(cpu)
 
 for i in "${metric[@]}"
 do
@@ -61,14 +62,14 @@ do
         # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
         # python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
         echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
-        # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-        # python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
+        python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times_software.csv
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_ampere_software_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-powell_ampere_software_${i}_${j}-score_results.csv
 # 
         echo "python $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        python3 $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_1p1_times.csv
-        # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
-        # python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
+        python3 $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f opo_ampere_times_software.csv
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_ampere_software_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-oneplusone_ampere_software_${i}_${j}-score_results.csv
 # # 
 #   
         done

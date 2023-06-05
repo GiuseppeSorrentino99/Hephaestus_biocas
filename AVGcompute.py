@@ -8,7 +8,7 @@ args = parser.parse_args()
 df = read_csv(args.filename)
 data = df.values
 if(args.mode == '0'):
-    print("mean IoU:", df['IoU'].mean(), "std IoU:", df['IoU'].std())
+    print(df['IoU'].mean(), ",", df['IoU'].std())
 else:
     print("mean Time:", df['time'].mean(), "std time:", df['time'].std())
 

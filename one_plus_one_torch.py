@@ -20,7 +20,8 @@ m_GScale=1.0/30000000.0
 
 compute_metric = None
 precompute_metric = None
-device = "cuda:0"
+#device = "cuda:0"
+device = "cpu"
 
 #torch.cuda.empty_cache()
 ref_vals = None
