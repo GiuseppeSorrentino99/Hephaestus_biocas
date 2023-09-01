@@ -20,11 +20,12 @@ m_GScale=1.0/30000000.0
 
 compute_metric = None
 precompute_metric = None
-device = "cuda:0"
+device = "cuda"
 
 #torch.cuda.empty_cache()
 ref_vals = None
 move_data = None
+torch.cuda.empty_cache()
 
 def no_transfer(input_data):
     return input_data
@@ -81,7 +82,7 @@ def precompute_mutual_information(Ref_uint8):
 
 def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
     
-    if(device == "cuda:0"):
+    if(device == "cuda"):
         ref_vals = torch.ones(Ref_uint8_ravel.numel(), dtype=torch.int, device=device)
         idx_joint = torch.stack((Ref_uint8_ravel, Flt_uint8_ravel)).long()
         j_h_init = torch.sparse.IntTensor(idx_joint, ref_vals, torch.Size([hist_dim, hist_dim])).to_dense()/Ref_uint8_ravel.numel()
@@ -516,7 +517,7 @@ def transform(image, par, volume):
     return img_warped 
 
 def compute_mi(ref_img, flt_img, t_mat, eref, volume):
-    flt_warped = transform(flt_img, to_cuda(t_mat), volume)
+    flt_warped = transform(flt_img, move_data(t_mat), volume)
     mi = mutual_information(ref_img, flt_warped.ravel(), eref)
     mi = -(mi.cpu())
     #print(mi)
@@ -728,71 +729,106 @@ def register_images(filename, Ref_uint8, Flt_uint8, volume):
     optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref)
     #print("optimal: ", optimal_params) 
     params_trans=to_matrix_complete(optimal_params)
-    flt_transform = transform(Flt_uint8, to_cuda(params_trans),volume)
+    flt_transform = transform(Flt_uint8, move_data(params_trans),volume)
     end_single_sw = time.time()
     # print('Final time: ', end_single_sw - start_single_sw)
     with open(filename, 'a') as file2:
                 file2.write("%s\n" % (end_single_sw - start_single_sw))
  
-    return (flt_transform)
+    return (params_trans)
 
-def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume):
-    for _ in range(1):
-        final_img=[]
-        times=[]
-        t = 0.0
-        it_time = 0.0
-        hist_dim = 256
-        dim = 512
-        #print(CT)
-        #print(PET)
-        global ref_vals
-        ref_vals = torch.ones(dim*dim*volume, dtype=torch.int, device=device)
-        global move_data
-        move_data = no_transfer if device=='cpu' else to_cuda
+def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
+    final_img=[]
+    times=[]
+    t = 0.0
+    it_time = 0.0
+    hist_dim = 256
+    dim = 512
+    
+    global move_data
+    move_data = no_transfer if device=='cpu' else to_cuda
+    left = args.first_slice #int(volume/2 - subvolume/2)
+    right = args.last_slice #int(volume/2 + subvolume/2)
+    #print("left", left)
+    #print("right", right)
+    global ref_vals
+    ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
+    refs = []
+    flts = []
+    couples = 0
+    for c,ij in enumerate(zip(CT[left:right], PET[left:right])):
+        i = ij[0]
+        j = ij[1]  
+        ref = pydicom.dcmread(i)
+        Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+        Ref_img[Ref_img==-2000]=1
+        
+        flt = pydicom.dcmread(j)
+        Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+
+        Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
+        Ref_uint8 = Ref_img.round().type(torch.uint8)
+                
+        Flt_img = (Flt_img - Flt_img.min())/(Flt_img.max() - Flt_img.min())*255
+        Flt_uint8 = Flt_img.round().type(torch.uint8)
+    
+        refs.append(Ref_uint8)
+        flts.append(Flt_uint8)
+        couples = couples + 1
+        if couples >= len(CT[left:right]):
+            break
+        
+    refs3D = torch.cat(refs)
+    flts3D = torch.cat(flts)
+    refs3D = torch.reshape(refs3D,(len(CT[left:right]),512,512))
+    flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
+    start_time = time.time()
+    transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
+    #print(transform_matrix.shape)
+    N = args.num_subvolumes
+    for index in range(N):
+        couples = 0
         refs = []
         flts = []
-        couples = 0
-        for c,ij in enumerate(zip(CT, PET)):
+        for c,ij in enumerate(zip(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))])):
             i = ij[0]
-            j = ij[1]  
+            j = ij[1]
+
             ref = pydicom.dcmread(i)
             Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
             Ref_img[Ref_img==-2000]=1
-            
+
             flt = pydicom.dcmread(j)
             Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
 
             Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
             Ref_uint8 = Ref_img.round().type(torch.uint8)
-                    
+
             Flt_img = (Flt_img - Flt_img.min())/(Flt_img.max() - Flt_img.min())*255
             Flt_uint8 = Flt_img.round().type(torch.uint8)
-        
             refs.append(Ref_uint8)
             flts.append(Flt_uint8)
+            del ref
+            del flt
+            del Flt_img
+            del Ref_img
+            gc.collect()
             couples = couples + 1
-            if couples >= volume:
-                break
-            
+            #if couples >= int(volume / N):
+            #    break
         refs3D = torch.cat(refs)
         flts3D = torch.cat(flts)
-        refs3D = torch.reshape(refs3D,(volume,512,512))
-        flts3D = torch.reshape(flts3D,(volume,512,512))
-        start_time = time.time()
-        f_img=(register_images(filename, refs3D, flts3D, volume))
-        final_img = f_img.cpu()
-        end_time= time.time()
-        it_time = (end_time - start_time)
-        times.append(it_time)
-        t=t+it_time
-        # df = pd.DataFrame([t, np.mean(times), np.std(times)],columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        # times_df = pd.DataFrame(times,columns=['Test'+str(patient_id)])#+str(config)accel_id.get_config())])
-        # df_path = os.path.join(curr_res,'Time_powll_%02d.csv' % (t_id))
-        # times_df_path = os.path.join(curr_res,'Img_powll_%02d.csv' % (t_id))
-        # df.to_csv(df_path, index=False)
-        # times_df.to_csv(times_df_path, index=False)
-        save_data(final_img,PET,curr_res,volume)
+        refs3D = torch.reshape(refs3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+        flts3D = torch.reshape(flts3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
+        del refs
+        del flts
+        gc.collect()
+        flt_transform = transform(flts3D, to_cuda(transform_matrix), len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+        flt_transform = flt_transform.cpu()
+        save_data(flt_transform, PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], curr_res, len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+
+
+
 
 def compute_wrapper(args, num_threads=1):
     config=args.config
@@ -817,7 +853,7 @@ def compute_wrapper(args, num_threads=1):
             end = images_per_thread * (i + 1) if i < num_threads - 1 else len(CT)
             name = "t%02d" % (i)
             set_start_method('spawn')
-            pool.append(Process(target=compute, args=(CT[start:end], PET[start:end], name, curr_res, i, k, args.filename,args.volume)))
+            pool.append(Process(target=compute, args=(CT[start:end], PET[start:end], name, curr_res, i, k, args.filename,args.volume, args)))
         for t in pool:
             t.start()
         for t in pool:
@@ -838,14 +874,21 @@ def main():
     parser.add_argument("-px", "--prefix", nargs='?', help='prefix Path of patients folder', default='./')
     parser.add_argument("-im", "--image_dimension", nargs='?', help='Target images dimensions', default=512, type=int)
     parser.add_argument("-c", "--config", nargs='?', help='prefix Path of patients folder', default='./')
-    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda:0'], default='cuda:0')
+    parser.add_argument("-dvc", "--device", nargs='?', help='Target device', choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument("-vol", "--volume", nargs='?', help='Volume',type = int, default=512)
     parser.add_argument("-f", "--filename", nargs='?', help='Filename', default="test.csv")
-
+    parser.add_argument("-fs", "--first_slice", nargs='?', help='Index of first slice for subvolume to consider, starting from 0',type = int, default=0)
+    parser.add_argument("-ls", "--last_slice", nargs='?', help='Index of last slice for subvolume to consider, starting from 0',type = int, default=-1)
+    parser.add_argument("-ns", "--num_subvolumes", nargs='?', help='Number of disjoint subvolume for which to apply the final registration.',type = int, default=1)
     
     args = parser.parse_args()
     num_threads=args.thread_number
 
+    if args.last_slice == -1:
+        args.last_slice = args.volume
+
+    if args.first_slice < 0 or args.last_slice < args.first_slice or args.last_slice > args.volume or args.num_subvolumes < 1 or args.num_subvolumes > args.volume:
+        raise ValueError("Wrong parameter values!")
     patient_number=args.patient
    
     #print(args.config)
