@@ -3,7 +3,7 @@
 # /******************************************
 # *MIT License
 # *
-# *Copyright (c) [2021] [Eleonora D'Arnese, Emanuele Del Sozzo, Davide Conficconi,  Marco Domenico Santambrogio]
+# *Copyright (c) [2023] [Giuseppe Sorrentino, Marco Venere, Eleonora D'Arnese, Davide Conficconi, Isabella Poles, Marco Domenico Santambrogio]
 # *
 # *Permission is hereby granted, free of charge, to any person obtaining a copy
 # *of this software and associated documentation files (the "Software"), to deal
@@ -37,26 +37,28 @@ CT_PATH=Dataset/ST0/SE0
 PET_PATH=Dataset/ST0/SE4
 GOLDEN_PATH=Dataset/ST0/NuovoGold
 RES_PATH=Dataset/OutputClassicMoments
-FIRST_SLICE=40
-LAST_SLICE=200
+FIRST_SLICE=0
+LAST_SLICE=-1
+NUM_SUBVOLUMES=1
 metric=(MI)
-dev=( cpu cuda )
+dev=( cuda cpu )
 
 for i in "${metric[@]}"
 do
     for j in "${dev[@]}"
     do
-        for i in {1..31}
-        do
-            echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f Powell_classicMoments_mem_constr_dwarf2.csv"
-            python3 $PYCODE_Powell -fs 40 -ls 200 -ns 4 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f Powell_classicMoments_mem_constr_dwarf2.csv
-            python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-            python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
+        ##SCRIPT TO PERFORM 3D IR VIA POWELL OPTIMIZER
+        echo "python3 $PYCODE_Powell -fs $FIRST_SLICE -ls $LAST_SLICE -ns $NUM_SUBVOLUMES -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f Powell_classicMoments_mem_constr_dwarf2.csv"
+        python3 $PYCODE_Powell -fs $FIRST_SLICE -ls $LAST_SLICE -ns $NUM_SUBVOLUMES -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f Powell_classicMoments_mem_constr_dwarf2.csv
+        ##OUTPUT ANALYSIS
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
 # # 
-            echo "python $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f 1p1_classicMoments_mem_constr_dwarf2.csv"
-            python3 $PYCODE_oneplusone -fs 30 -ls 210 -ns 4 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f 1p1_classicMoments_mem_constr_dwarf2.csv
-            python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
-            python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv  
-        done
+        ##SCRIPT TO PERFORM £D IR VIA 1+1 OPTIMIZER
+        echo "python $PYCODE_oneplusone -fs $FIRST_SLICE -ls $LAST_SLICE -ns $NUM_SUBVOLUMES -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f 1p1_classicMoments_mem_constr_dwarf2.csv"
+        python3 $PYCODE_oneplusone -fs $FIRST_SLICE -ls $LAST_SLICE -ns $NUM_SUBVOLUMES -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f 1p1_classicMoments_mem_constr_dwarf2.csv
+        ##OUTPUT ANALYSIS
+        python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
+        python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv  
     done
 done

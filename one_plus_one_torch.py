@@ -1,3 +1,26 @@
+# /******************************************
+# *MIT License
+# *
+# *Copyright (c) [2023] [Giuseppe Sorrentino, Marco Venere, Eleonora D'Arnese, Davide Conficconi, Isabella Poles, Marco Domenico Santambrogio]
+# *
+# *Permission is hereby granted, free of charge, to any person obtaining a copy
+# *of this software and associated documentation files (the "Software"), to deal
+# *in the Software without restriction, including without limitation the rights
+# *to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# *copies of the Software, and to permit persons to whom the Software is
+# *furnished to do so, subject to the following conditions:
+# *
+# *The above copyright notice and this permission notice shall be included in all
+# *copies or substantial portions of the Software.
+# *
+# *THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# *IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# *FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# *AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# *LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# *SOFTWARE.
+# ******************************************/
 import os
 import re
 import pydicom
@@ -13,6 +36,7 @@ import statistics
 import argparse
 import kornia
 import torch
+import gc
 
 m_Gaussfaze=1
 m_Gausssave=np.zeros((1,8*128))
@@ -20,9 +44,8 @@ m_GScale=1.0/30000000.0
 
 compute_metric = None
 precompute_metric = None
-device = "cuda"
 
-#torch.cuda.empty_cache()
+torch.cuda.empty_cache()
 ref_vals = None
 move_data = None
 torch.cuda.empty_cache()
@@ -33,9 +56,9 @@ def no_transfer(input_data):
 def to_cuda(input_data):
     return input_data.cuda(non_blocking=True)
 
-def my_squared_hist2d_t(sample, bins, smin, smax):
+def my_squared_hist2d_t(sample, bins, smin, smax, args):
     D, N = sample.shape
-    edges = torch.linspace(smin, smax, bins + 1, device=device)
+    edges = torch.linspace(smin, smax, bins + 1, device=args.device)
     nbin = edges.shape[0] + 1
     
     # Compute the bin number each sample falls into.
@@ -80,15 +103,15 @@ def precompute_mutual_information(Ref_uint8):
     return eref
 
 
-def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref):
+def mutual_information(Ref_uint8_ravel, Flt_uint8_ravel, eref, args):
     
-    if(device == "cuda"):
-        ref_vals = torch.ones(Ref_uint8_ravel.numel(), dtype=torch.int, device=device)
+    if(args.device == "cuda"):
+        ref_vals = torch.ones(Ref_uint8_ravel.numel(), dtype=torch.int, device=args.device)
         idx_joint = torch.stack((Ref_uint8_ravel, Flt_uint8_ravel)).long()
         j_h_init = torch.sparse.IntTensor(idx_joint, ref_vals, torch.Size([hist_dim, hist_dim])).to_dense()/Ref_uint8_ravel.numel()
     else:
         idx_joint = torch.stack((Ref_uint8_ravel, Flt_uint8_ravel))
-        j_h_init = my_squared_hist2d_t(idx_joint, hist_dim, 0, 255)/Ref_uint8_ravel.numel()
+        j_h_init = my_squared_hist2d_t(idx_joint, hist_dim, 0, 255, args)/Ref_uint8_ravel.numel()
     j_h = j_h_init[j_h_init>0.000000000000001]
     entropy=(torch.sum(j_h*(torch.log2(j_h))))*-1
     
@@ -270,12 +293,12 @@ def FastNorm():
     else:
         return 10
 
-def to_matrix_complete(vector_params):
+def to_matrix_complete(vector_params, args):
     """
         vector_params contains tx, ty, tz for translation on x, y and z axes respectively
         and cosine of phi, theta, psi for rotations around x, y, and z axes respectively.
     """
-    mat_params=torch.empty((3,4), device = device)
+    mat_params=torch.empty((3,4), device = args.device)
     mat_params[0][3]=vector_params[0] 
     mat_params[1][3]=vector_params[1] 
     mat_params[2][3]=vector_params[2]
@@ -313,13 +336,12 @@ def to_matrix_complete(vector_params):
     mat_params[0][2] = sin_phi_sin_psi + cos_phi * sin_theta_cos_psi
     mat_params[1][2] = -sin_phi_cos_psi + cos_phi * sin_theta_sin_psi
     mat_params[2][2] = cos_phi_cos_theta
-    # print(mat_params)
     return (mat_params)
 
 
-def compute_moments(img):
-    moments = torch.empty(6, device=device)
-    l = torch.arange(img.shape[0], device=device)
+def compute_moments(img, args):
+    moments = torch.empty(6, device=args.device)
+    l = torch.arange(img.shape[0], device=args.device)
     moments[0] = torch.sum(img) # m00
     moments[1] = torch.sum(img * l) # m10
     moments[2] = torch.sum(img * (l**2)) # m20
@@ -328,100 +350,7 @@ def compute_moments(img):
     moments[5] = torch.sum(img * l * l.reshape((img.shape[0], 1))) # m11
     return moments
 
-# def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
-    
-#     tot_flt_avg_10 = 0
-#     tot_flt_avg_01 = 0
-#     tot_flt_mu_20 = 0
-#     tot_flt_mu_02 = 0
-#     tot_flt_mu_11 = 0
-#     tot_ref_avg_10 = 0
-#     tot_ref_avg_01 = 0
-#     tot_ref_mu_20 = 0
-#     tot_ref_mu_02 = 0
-#     tot_ref_mu_11 = 0
-#     tot_params1 = 0
-#     tot_params2 = 0
-#     tot_roundness = 0
-#     for i in range(0, volume):
-#         Ref_uint8 = Ref_uint8s[i, :, :]
-#         Flt_uint8 = Flt_uint8s[i, :, :]
-#         try:
-#             ref_mom = compute_moments(Ref_uint8)
-#             flt_mom = compute_moments(Flt_uint8)
-#         except:
-#              continue
-#         flt_avg_10 = flt_mom[1]/flt_mom[0]
-#         flt_avg_01 = flt_mom[3]/flt_mom[0]
-#         flt_mu_20 = (flt_mom[2]/flt_mom[0]*1.0)-(flt_avg_10*flt_avg_10)
-#         flt_mu_02 = (flt_mom[4]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_01)
-#         flt_mu_11 = (flt_mom[5]/flt_mom[0]*1.0)-(flt_avg_01*flt_avg_10)
-#         ref_avg_10 = ref_mom[1]/ref_mom[0]
-#         ref_avg_01 = ref_mom[3]/ref_mom[0]
-#         ref_mu_20 = (ref_mom[2]/ref_mom[0]*1.0)-(ref_avg_10*ref_avg_10)
-#         ref_mu_02 = (ref_mom[4]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_01)
-#         ref_mu_11 = (ref_mom[5]/ref_mom[0]*1.0)-(ref_avg_01*ref_avg_10)
-#         params1 = ref_mom[1]/ref_mom[0]-flt_mom[1]/flt_mom[0]
-#         params2 = ref_mom[3]/ref_mom[0] - flt_mom[3]/flt_mom[0]
-#         roundness=(flt_mom[2]/flt_mom[0]) / (flt_mom[4]/flt_mom[0])
-#         tot_flt_avg_10 += flt_avg_10
-#         tot_flt_avg_01 += flt_avg_01
-#         tot_flt_mu_20 += flt_mu_20
-#         tot_flt_mu_02 += flt_mu_02
-#         tot_flt_mu_11 += flt_mu_11
-#         tot_ref_avg_10 += ref_avg_10
-#         tot_ref_avg_01 += ref_avg_01
-#         tot_ref_mu_20 += ref_mu_20
-#         tot_ref_mu_02 += ref_mu_02
-#         tot_ref_mu_11 += ref_mu_11
-#         tot_params1 += params1
-#         tot_params2 += params2
-#         tot_roundness += roundness
-#     tot_flt_avg_10 = tot_flt_avg_10/volume
-#     tot_flt_avg_01 = tot_flt_avg_01/volume
-#     tot_flt_mu_20 = tot_flt_mu_20/volume
-#     tot_flt_mu_02 = tot_flt_mu_02/volume
-#     tot_flt_mu_11 = tot_flt_mu_11/volume
-#     tot_ref_avg_10 = tot_ref_avg_10/volume
-#     tot_ref_avg_01 = tot_ref_avg_01/volume
-#     tot_ref_mu_20 = tot_ref_mu_20/volume
-#     tot_ref_mu_02 = tot_ref_mu_02/volume
-#     tot_ref_mu_11 = tot_ref_mu_11/volume
-#     tot_params1 = tot_params1/volume
-#     tot_params2 = tot_params2/volume
-#     tot_roundness = tot_roundness/volume
-#     # try:
-#     #     rho_flt=0.5*torch.atan((2.0*flt_mu_11)/(flt_mu_20-flt_mu_02))
-#     #     rho_ref=0.5*torch.atan((2.0*ref_mu_11)/(ref_mu_20-ref_mu_02))
-#     #     delta_rho=rho_ref-rho_flt
-#     #     if math.fabs(tot_roundness-1.0)<0.3:
-#     #         delta_rho = 0
-#     # except Exception:
-#     #     delta_rho = 0
-# #since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
-#     params[0][3] = tot_params1
-#     params[1][3] = tot_params2
-#     rho_flt=0.5*math.atan((2.0*tot_flt_mu_11)/(tot_flt_mu_20-tot_flt_mu_02))
-#     rho_ref=0.5*math.atan((2.0*tot_ref_mu_11)/(tot_ref_mu_20-tot_ref_mu_02))
-#     delta_rho=rho_ref-rho_flt
-#     if math.fabs(tot_roundness-1.0)>=0.3:
-#         params[0][0]= torch.cos(torch.tensor([delta_rho]))
-#         params[0][1] = -torch.sin(torch.tensor([delta_rho]))
-#         params[1][0] = torch.sin(torch.tensor([delta_rho]))
-#         params[1][1] = torch.cos(torch.tensor([delta_rho]))
-#     else:
-#         params[0][0]= torch.Tensor([1.0])
-#         params[0][1] = torch.Tensor([0.0])
-#         params[1][0] = torch.Tensor([0.0])
-#         params[1][1] = torch.Tensor([1.0])
-#     params[2][2] = torch.Tensor([1.0])
-#     params[0][2] = params[0][3] = torch.Tensor([0.0])
-#     params[2][0] = params[2][1] = torch.Tensor([0.0])
-#     #params[5] = torch.cos(torch.tensor([delta_rho]))
-#     #print("before: ", params)
-#     return params
-
-def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
+def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume, args):
     
     tot_flt_avg_10 = 0
     tot_flt_avg_01 = 0
@@ -440,8 +369,8 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
         Ref_uint8 = Ref_uint8s[i, :, :]
         Flt_uint8 = Flt_uint8s[i, :, :]
         try:
-            ref_mom = compute_moments(Ref_uint8)
-            flt_mom = compute_moments(Flt_uint8)
+            ref_mom = compute_moments(Ref_uint8, args)
+            flt_mom = compute_moments(Flt_uint8, args)
         except:
              continue
         flt_avg_10 = flt_mom[1]/flt_mom[0]
@@ -493,20 +422,6 @@ def estimate_initial(Ref_uint8s,Flt_uint8s, params, volume):
             delta_rho = torch.Tensor([0])
     except Exception:
         delta_rho = torch.Tensor([0])
-#since the matrix we want to create is an affine matrix, the initial parameters have been prepared as a "particular" affine, the similarity matrix.
-    # if math.fabs(tot_roundness-1.0)>=0.3:
-    #     params[0][0]= math.cos(delta_rho)
-    #     params[0][1] = -math.sin(delta_rho)
-    #     params[1][0] = math.sin(delta_rho)
-    #     params[1][1] = math.cos(delta_rho)
-    # else:
-    #     params[0][0]= 1.0
-    #     params[0][1] = 0.0
-    #     params[1][0] = 0.0
-    #     params[1][1] = 1.0
-    # params[2][2] = 1
-    # params[0][2] = params[0][3] = 0
-    # params[2][0] = params[2][1] = 0
     
     return torch.Tensor([tot_params1, tot_params2, 0, 1, 1, torch.cos(delta_rho)])
 
@@ -516,15 +431,14 @@ def transform(image, par, volume):
     img_warped = kornia.geometry.warp_affine3d(tmp_img, t_par, dsize=(volume, tmp_img.shape[3], tmp_img.shape[4]), align_corners = True)
     return img_warped 
 
-def compute_mi(ref_img, flt_img, t_mat, eref, volume):
+def compute_mi(ref_img, flt_img, t_mat, eref, volume, args):
     flt_warped = transform(flt_img, move_data(t_mat), volume)
-    mi = mutual_information(ref_img, flt_warped.ravel(), eref)
+    mi = mutual_information(ref_img, flt_warped.ravel(), eref, args)
     mi = -(mi.cpu())
-    #print(mi)
     return mi
 
 
-def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
+def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume, args):
     tot_flt_avg_10 = 0
     tot_flt_avg_01 = 0
     tot_flt_mu_20 = 0
@@ -543,10 +457,8 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
         Flt_uint8 = Flt_uint8s[i, :, :]
         
         try:
-            ref_mom = compute_moments(Ref_uint8)
-            #print(ref_mom)
-            flt_mom = compute_moments(Flt_uint8)
-            #print(flt_mom)
+            ref_mom = compute_moments(Ref_uint8, args)
+            flt_mom = compute_moments(Flt_uint8, args)
 
             flt_avg_10 = flt_mom[1]/flt_mom[0]
             flt_avg_01 = flt_mom[3]/flt_mom[0]
@@ -576,7 +488,6 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
             tot_params1 += params[0]
             tot_params2 += params[1]
             tot_roundness += roundness
-            #print(i)
         except:
              continue
         
@@ -603,30 +514,27 @@ def estimate_rho(Ref_uint8s,Flt_uint8s, params, volume):
     except Exception as e:
         delta_rho = 0
     
-    #print(tot_params1, tot_params2)
     return torch.Tensor([delta_rho]), torch.Tensor([tot_params1]), torch.Tensor([tot_params2])
 
-def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume):
+def estimate_initial3D(Ref_uint8s,Flt_uint8s, params, volume, args):
     params = torch.zeros((6,))
-    psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume)
+    psi, tx, ty = estimate_rho(Ref_uint8s, Flt_uint8s, params, volume, args)
     rot_ref_phi = torch.rot90(Ref_uint8s, dims=[0,2])
     rot_flt_phi = torch.rot90(Flt_uint8s, dims=[0,2])
-    phi, _, _  = estimate_rho(rot_ref_phi, rot_flt_phi, params, volume)
+    phi, _, _  = estimate_rho(rot_ref_phi, rot_flt_phi, params, volume, args)
     rot_ref_theta = torch.rot90(Ref_uint8s, dims=[1,2])
     rot_flt_theta = torch.rot90(Flt_uint8s, dims=[1,2])
-    theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume)
+    theta, _, _ = estimate_rho(rot_ref_theta, rot_flt_theta, params, volume, args)
     params[0] = tx
     params[1] = ty
     params[2] = torch.Tensor([0])
     params[3] = torch.cos(phi)
     params[4] = torch.cos(theta)
     params[5] = torch.cos(psi)
-    #params = [tx, ty, 0, torch.cos(phi), torch.cos(theta), torch.cos(psi)]
     return params
 
-def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
+def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref, args):
     
-    #parent_cpu = parent.cpu() 
     m_CatchGetValueException = False
     m_MetricWorstPossibleValue = 0
 
@@ -650,16 +558,15 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     child = torch.empty(spaceDimension)
     delta = torch.empty(spaceDimension)
     
-    parent = torch.zeros((3,4), device = device)
-    parentPosition = torch.empty((6,), device = device)
-    estimate_initial(Ref_uint8, Flt_uint8, parentPosition, volume)
+    parent = torch.zeros((3,4), device = args.device)
+    parentPosition = torch.empty((6,), device = args.device)
+    estimate_initial(Ref_uint8, Flt_uint8, parentPosition, volume, args)
     parentPosition = parentPosition.cpu()
 
     
-    #parentPosition=torch.Tensor([parent[0][3],parent[1][3],0, 1.0, 1.0, parent[0][0]])
-    parent = to_matrix_complete(parentPosition)
-    Ref_uint8_ravel = Ref_uint8.ravel()#.double()
-    pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(parent), eref, volume)
+    parent = to_matrix_complete(parentPosition, args)
+    Ref_uint8_ravel = Ref_uint8.ravel()
+    pvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(parent), eref, volume, args)
     childPosition = torch.empty(spaceDimension)
 
     m_CurrentIteration = 0
@@ -672,9 +579,8 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
     
         delta = A.matmul(f_norm)#A * f_norm
         child = torch.Tensor(parentPosition) + delta
-        childPosition = to_matrix_complete(child)
-        # print(parentPosition)
-        cvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(childPosition), eref, volume)
+        childPosition = to_matrix_complete(child, args)
+        cvalue = compute_mi(Ref_uint8_ravel, Flt_uint8, move_data(childPosition), eref, volume, args)
 
         adjust = m_ShrinkFactor
     
@@ -705,33 +611,29 @@ def OnePlusOne(Ref_uint8, Flt_uint8, volume, eref):
         for c in range(0, spaceDimension):
             for r in range(0,spaceDimension):
                 A[r][c] += alpha * delta[r] * f_norm[c];
-    #print("final params", parentPosition)
     return (parentPosition) 
 
 def save_data(OUT_STAK, name, res_path, volume):
     OUT_STAK = torch.reshape(OUT_STAK,(volume,1,512, 512))
-    # print(OUT_STAK.shape)
-    # print(OUT_STAK.size())
+
     for i in range(len(OUT_STAK)):
         b=name[i].split('/')
         c=b.pop()
         d=c.split('.')
-        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5])+1)+'.png'), kornia.tensor_to_image(OUT_STAK[i].cpu().byte())) #Creare cartelle 
+        cv2.imwrite(os.path.join(res_path, d[0][0:2]+str(int(d[0][2:5])+1)+'.png'), kornia.tensor_to_image(OUT_STAK[i].cpu().byte())) 
 
 
 
-def register_images(filename, Ref_uint8, Flt_uint8, volume):
+def register_images(filename, Ref_uint8, Flt_uint8, volume, args):
     global precompute_metric
     start_single_sw = time.time()
     eref = precompute_mutual_information(Ref_uint8)
     flt_u = torch.unsqueeze(Flt_uint8, dim=0).float()
     flt_stack = torch.stack((flt_u, flt_u))
-    optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref)
-    #print("optimal: ", optimal_params) 
-    params_trans=to_matrix_complete(optimal_params)
+    optimal_params = OnePlusOne(Ref_uint8, Flt_uint8, volume, eref, args)
+    params_trans=to_matrix_complete(optimal_params, args)
     flt_transform = transform(Flt_uint8, move_data(params_trans),volume)
     end_single_sw = time.time()
-    # print('Final time: ', end_single_sw - start_single_sw)
     with open(filename, 'a') as file2:
                 file2.write("%s\n" % (end_single_sw - start_single_sw))
  
@@ -746,13 +648,11 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
     dim = 512
     
     global move_data
-    move_data = no_transfer if device=='cpu' else to_cuda
-    left = args.first_slice #int(volume/2 - subvolume/2)
-    right = args.last_slice #int(volume/2 + subvolume/2)
-    #print("left", left)
-    #print("right", right)
+    move_data = no_transfer if args.device=='cpu' else to_cuda
+    left = args.first_slice 
+    right = args.last_slice 
     global ref_vals
-    ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=device)
+    ref_vals = torch.ones(dim*dim*len(CT[left:right]), dtype=torch.int, device=args.device)
     refs = []
     flts = []
     couples = 0
@@ -760,11 +660,11 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
         i = ij[0]
         j = ij[1]  
         ref = pydicom.dcmread(i)
-        Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+        Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=args.device)
         Ref_img[Ref_img==-2000]=1
         
         flt = pydicom.dcmread(j)
-        Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+        Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=args.device)
 
         Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
         Ref_uint8 = Ref_img.round().type(torch.uint8)
@@ -783,8 +683,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
     refs3D = torch.reshape(refs3D,(len(CT[left:right]),512,512))
     flts3D = torch.reshape(flts3D,(len(CT[left:right]),512,512))
     start_time = time.time()
-    transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right])))
-    #print(transform_matrix.shape)
+    transform_matrix=(register_images(filename, refs3D, flts3D, len(CT[left:right]), args))
     N = args.num_subvolumes
     for index in range(N):
         couples = 0
@@ -795,11 +694,11 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
             j = ij[1]
 
             ref = pydicom.dcmread(i)
-            Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+            Ref_img = torch.tensor(ref.pixel_array.astype(np.int16), dtype=torch.int16, device=args.device)
             Ref_img[Ref_img==-2000]=1
 
             flt = pydicom.dcmread(j)
-            Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=device)
+            Flt_img = torch.tensor(flt.pixel_array.astype(np.int16), dtype=torch.int16, device=args.device)
 
             Ref_img = (Ref_img - Ref_img.min())/(Ref_img.max() - Ref_img.min())*255
             Ref_uint8 = Ref_img.round().type(torch.uint8)
@@ -814,8 +713,6 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
             del Ref_img
             gc.collect()
             couples = couples + 1
-            #if couples >= int(volume / N):
-            #    break
         refs3D = torch.cat(refs)
         flts3D = torch.cat(flts)
         refs3D = torch.reshape(refs3D,(len(CT[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]),512,512))
@@ -823,7 +720,7 @@ def compute(CT, PET, name, curr_res, t_id, patient_id, filename,volume, args):
         del refs
         del flts
         gc.collect()
-        flt_transform = transform(flts3D, to_cuda(transform_matrix), len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
+        flt_transform = transform(flts3D, move_data(transform_matrix), len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
         flt_transform = flt_transform.cpu()
         save_data(flt_transform, PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))], curr_res, len(PET[int(index*volume/N):int(np.minimum(int((index+1)*volume/N), volume))]))
 
@@ -835,7 +732,6 @@ def compute_wrapper(args, num_threads=1):
     
     for k in range(args.offset, args.patient):
         pool = []
-        #curr_prefix = args.prefix+str(k)
         curr_prefix = args.prefix
         curr_ct = os.path.join(curr_prefix,args.ct_path)
         curr_pet = os.path.join(curr_prefix,args.pet_path)
@@ -847,7 +743,6 @@ def compute_wrapper(args, num_threads=1):
         CT.sort(key=lambda var:[int(y) if y.isdigit() else y for y in re.findall(r'[^0-9]|[0-9]+',var)])
         assert len(CT) == len(PET)
         images_per_thread = len(CT) // num_threads
-        # print(images_per_thread)
         for i in range(num_threads):
             start = images_per_thread * i
             end = images_per_thread * (i + 1) if i < num_threads - 1 else len(CT)
@@ -864,7 +759,7 @@ dim = 512
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Iron software for IR onto a python env')
+    parser = argparse.ArgumentParser(description='Athena software for 3D IR onto a python env exploiting GPUs')
     parser.add_argument("-pt", "--patient", nargs='?', help='Number of the patient to analyze', default=1, type=int)
     parser.add_argument("-o", "--offset", nargs='?', help='Starting patient to analyze', default=0, type=int)
     parser.add_argument("-cp", "--ct_path", nargs='?', help='Path of the CT Images', default='./')
@@ -890,19 +785,14 @@ def main():
     if args.first_slice < 0 or args.last_slice < args.first_slice or args.last_slice > args.volume or args.num_subvolumes < 1 or args.num_subvolumes > args.volume:
         raise ValueError("Wrong parameter values!")
     patient_number=args.patient
-   
-    #print(args.config)
-    #print(args)
 
     global compute_metric
     compute_metric = compute_mi
     global precompute_metric
     precompute_metric = precompute_mutual_information
 
-
     compute_wrapper(args, num_threads)
         
-    #print("Faber (1+1) python is at the end :)")
 
 
 

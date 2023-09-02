@@ -1,3 +1,26 @@
+# /******************************************
+# *MIT License
+# *
+# *Copyright (c) [2023] [Giuseppe Sorrentino, Marco Venere, Eleonora D'Arnese, Davide Conficconi, Isabella Poles, Marco Domenico Santambrogio]
+# *
+# *Permission is hereby granted, free of charge, to any person obtaining a copy
+# *of this software and associated documentation files (the "Software"), to deal
+# *in the Software without restriction, including without limitation the rights
+# *to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# *copies of the Software, and to permit persons to whom the Software is
+# *furnished to do so, subject to the following conditions:
+# *
+# *The above copyright notice and this permission notice shall be included in all
+# *copies or substantial portions of the Software.
+# *
+# *THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# *IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# *FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# *AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# *LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# *SOFTWARE.
+# ******************************************/
 import argparse
 from skimage import exposure
 from scipy.spatial import distance
@@ -10,16 +33,18 @@ import numpy as np
 import torch
 import re
 import pydicom
-import faberImageRegistration as fir
+import ImageRegistration as ir
 
 def save_data(final_img):
     for i in range(len(final_img)):
-        cv2.imwrite("Dataset/GeneratedFloat/IM" + str(i)+".png",final_img[i])
+        if not cv2.imwrite("Dataset/GeneratedFloat/IM" + str(i)+".png",final_img[i]):
+            raise Exception("Could not write image")
 
 
 
 
-parser = argparse.ArgumentParser(description='Iron software for IR onto a python env')
+
+parser = argparse.ArgumentParser(description='Athena software for IR onto a python env')
 parser.add_argument("-tx", "--tx", nargs='?', help='Translation over X axis', default=0,type=float)
 parser.add_argument("-ty", "--ty", nargs='?', help='Translation over Y axis', default=0,type=float)
 parser.add_argument("-tz", "--tz",  nargs = '?', help='Translation over Z axis',default=0,type=float)
@@ -47,6 +72,6 @@ for c,i in enumerate(CT):
         break
 refs3D = torch.cat(refs)
 refs3D = torch.reshape(refs3D,(volume,512,512))
-params = fir.to_matrix_complete([args.tx,args.ty,args.tz,args.cosX / 100,args.cosY / 100,args.cosZ / 100])
-flt = fir.transform(refs3D,params,volume)
+params = ir.to_matrix_complete([args.tx,args.ty,args.tz,args.cosX / 100,args.cosY / 100,args.cosZ / 100])
+flt = ir.transform(refs3D,params,volume)
 save_data(flt)

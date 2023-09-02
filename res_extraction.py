@@ -1,7 +1,7 @@
 # /******************************************
 # *MIT License
 # *
-# *Copyright (c) [2022] [Eleonora D'Arnese, Davide Conficconi, Emanuele Del Sozzo, Luigi Fusco, Donatella Sciuto, Marco Domenico Santambrogio]
+# *Copyright (c) [2023] [Giuseppe Sorrentino, Marco Venere, Eleonora D'Arnese, Davide Conficconi, Isabella Poles, Marco Domenico Santambrogio]
 # *
 # *Permission is hereby granted, free of charge, to any person obtaining a copy
 # *of this software and associated documentation files (the "Software"), to deal
@@ -67,7 +67,7 @@ import glob
 import pandas as pd
 import numpy as np
 
-parser = argparse.ArgumentParser(description='Iron software for res analysis onto a python env')
+parser = argparse.ArgumentParser(description='Athena software for res analysis onto a python env')
 parser.add_argument("-f", "--flag", nargs='?', type=int, help='0 Read png images, 1 read dcm', default=0)
 parser.add_argument("-tg", "--threshold_g", nargs='?', help='Threshold of G', default=2)
 parser.add_argument("-tt", "--threshold_t", nargs='?', help='Threshold of T', default=2)

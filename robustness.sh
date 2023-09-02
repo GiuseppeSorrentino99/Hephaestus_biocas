@@ -3,7 +3,7 @@
 # /******************************************
 # *MIT License
 # *
-# *Copyright (c) [2021] [Eleonora D'Arnese, Emanuele Del Sozzo, Davide Conficconi,  Marco Domenico Santambrogio]
+# *Copyright (c) [2023] [Giuseppe Sorrentino, Marco Venere, Eleonora D'Arnese, Davide Conficconi, Isabella Poles, Marco Domenico Santambrogio]
 # *
 # *Permission is hereby granted, free of charge, to any person obtaining a copy
 # *of this software and associated documentation files (the "Software"), to deal
@@ -37,44 +37,14 @@ CT_PATH=Dataset/ST0/SE0
 PET_PATH=Dataset/GeneratedFloat
 GOLDEN_PATH=Dataset/ST0/NuovoGold
 RES_PATH=Dataset/OutputClassicMoments
-
-#metric=( MI CC MSE )
+mkdir -p $PET_PATH
 metric=(MI)
-#dev=( cpu cuda )
-dev=(cuda:0)
+dev=(cuda)
 
 for i in "${metric[@]}"
 do
     for j in "${dev[@]}"
     do
-        # for tx in {-200..200..10}
-        # do
-        # echo -n $tx , 0, 0, >> robustness.csv
-        # python3 FloatCreator.py -tx $tx
-        # #echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        # python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
-        # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-        # python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv >> robustness.csv
-        # done
-        # for ty in {-250..-200..10}
-        # do
-        # echo -n 0, $ty , 0, >> robustness.csv
-        # python3 FloatCreator.py -ty $ty
-        # #echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        # python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
-        # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-        # python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv >> robustness.csv
-        # done
-        # for cosz in {90..100..1}
-        # do
-        # echo -n  0, 0,  $cosz,  >> robustness.csv
-        # python3 FloatCreator.py -cosZ $cosz
-        # #echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-        # python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
-        # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-        # python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv >> robustness.csv
-        # done
-
         for tx in  {-140,-125,-110,-95,-80,-65,110,125,140,155,170,185,200}
         do  
             for ty in {-210,-195,-180,-165,120,135,150,165,180}
@@ -83,37 +53,12 @@ do
                 do
                     echo -n  $tx, $ty,  $cosZ,  >> robustness.csv
                     python3 FloatCreator.py -tx $tx -ty $ty -cosZ $cosZ
-                    #echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-                    python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
+                    echo "python3 $PYCODE_Powell -png True -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
+                    python3 $PYCODE_Powell -png True -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
                     python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
                     python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv >> robustness.csv
                 done
-            done
-        done
-#         for i in {1..31}
-#         do
-#         #OLD
-#         #  echo "python $PYCODE_Powell -pt 1 -o 0 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -mtr $i -dvc $j"
-#         #  python3 $PYCODE_Powell -pt 1 -o 0 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -mtr $i -dvc $j
-#         #  echo "python $PYCODE_oneplusone -pt 1 -o 0 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -mtr $i -dvc $j"
-#         #  python3 $PYCODE_oneplusone -pt 1 -o 0 -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -mtr $i -dvc $j 
-       
-#         #new
-#         # echo "python3 $PYCODE_oneplusone_mod -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-#         # python3 $PYCODE_oneplusone_mod -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246
-#         # python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
-#         # python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
-#         echo "python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-#         #python3 $PYCODE_Powell -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/powell_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f powell_ampere_times.csv
-#         python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/powell_${i}_${j}/ -l powell_${i}_${j} -rp ./
-#         python3 AVGcompute.py -f gold-powell_${i}_${j}-score_results.csv
-# # 
-#         echo "python $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246"
-#         #python3 $PYCODE_oneplusone -cp $CT_PATH -pp $PET_PATH -rp $RES_PATH/oneplusone_${i}_${j} -t 1 -px $DATASET_FLDR -im $IMG_DIM -dvc $j -vol 246 -f opo_ampere_times.csv
-#         python3 res_extraction.py -f 0 -rg $GOLDEN_PATH/ -rt $RES_PATH/oneplusone_${i}_${j}/ -l oneplusone_${i}_${j} -rp ./
-#         python3 AVGcompute.py -f gold-oneplusone_${i}_${j}-score_results.csv
-# # 
-#   
+            done   
         done
     done
 done
