@@ -8,8 +8,8 @@ This repository contains the code relative the publication "ATHENA: a GPU-based 
 4. The 1+1 code takes inspiration from [ITK code](https://github.com/InsightSoftwareConsortium/ITK)
 
 ## Code organization
-* `*.py` python source code for the 1+1 or Powell's optimizations procedures, and for output analysis
-* `run_script.sh` automation script to run extensive tests for both CPU and CUDA-based platforms
+* `*.py` python source code for the 1+1 or Powell's optimizations procedures, for output evaluation, and for robustness analysis.
+* `run_script.sh` automation script to run extensive tests for both CPU and CUDA-based platforms.
 * `robustness.sh` automation script to run extensive robustness analysis for our CUDA-based platform.
 
 
