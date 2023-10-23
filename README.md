@@ -20,12 +20,11 @@ Contributors:  Sorrentino, Giuseppe and Venere, Marco and D'Arnese, Eleonora and
 If you find this repository useful, please use the following citation(s):
 
 ```
-@inproceedings{faberbiocas2021,
-author = {D'Arnese, Eleonora and Del Sozzo, Emanuele and Conficconi, Davide and Santambrogio, Marco D.},
-title = {Exploiting Heterogeneous Architectures for Rigid Image Registration},
-booktitle = {2021 IEEE Biomedical Circuits and Systems Conference (BioCAS)},
-pages={1--4},
-year = {2021},
-organization={IEEE}
+@inproceedings{sorrentino2023athena,
+  title={ATHENA: a GPU-based Framework for Biomedical 3D Rigid Image Registration},
+  author={Sorrentino, Giuseppe and Venere, Marco and D'Arnese, Eleonora and Conficconi, Davide and Poles, Isabella and Santambrogio, Marco and others},
+  booktitle={2023 IEEE Biomedical Circuits and Systems Conference (BioCAS)},
+  pages={1--5},
+  year={2023}
 }
 ```
